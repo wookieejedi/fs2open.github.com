@@ -104,6 +104,7 @@ int gr_opengl_bm_make_render_target(int handle, int *width, int *height, int *bp
 	if ( Cmdline_no_fbo ) {
 		return 0;
 	}
+	mprintf(("ZZZZ DA %i, %i \n", *width, *height));
 	
 	if ( (flags & BMP_FLAG_CUBEMAP) && (*width != *height) ) {
 		if (*width < *height)
@@ -111,6 +112,8 @@ int gr_opengl_bm_make_render_target(int handle, int *width, int *height, int *bp
 		else
 			*height = *width;
 	}
+
+	mprintf(("ZZZZ DB %i, %i \n", *width, *height));
 
 	if ( opengl_make_render_target(handle, width, height, bpp, mm_lvl, flags) ) {
 		return 1;

@@ -407,6 +407,7 @@ void gr_opengl_dump_envmap(const char* filename)
 
 	// New render target
 	int sm_flags = (BMP_FLAG_RENDER_TARGET_STATIC);
+	mprintf(("ZZZ J6\n"));
 	int spheremap_render_target = bm_make_render_target(sphere_width, sphere_height, sm_flags);
 	bm_set_render_target(spheremap_render_target);
 	

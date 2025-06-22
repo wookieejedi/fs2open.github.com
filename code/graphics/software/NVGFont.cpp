@@ -125,7 +125,7 @@ namespace font
 		scale_factor *= scaleMultiplier;
 
 		path->fontFaceId(m_handle);
-		path->fontSize(m_size * scale_factor);
+		path->fontSize(m_size);
 		path->textLetterSpacing(m_letterSpacing);
 		path->textAlign(static_cast<TextAlign>(ALIGN_TOP | ALIGN_LEFT));
 

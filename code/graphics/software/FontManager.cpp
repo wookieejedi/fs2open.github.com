@@ -359,6 +359,7 @@ namespace font
 
 		std::unique_ptr<NVGFont> nvgFont(new NVGFont());
 		nvgFont->setHandle(handle);
+		mprintf(("FFF setting fontSize of %f\n", fontSize));
 		nvgFont->setSize(fontSize);
 
 		auto ptr = nvgFont.get();

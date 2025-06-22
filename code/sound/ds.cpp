@@ -657,6 +657,7 @@ void ds_unload_buffer(int sid)
 	ALuint buf_id = sound_buffers[sid].buf_id;
 
 	if ( (buf_id != 0) && alIsBuffer(buf_id) ) {
+		//mprintf(("YYY buf_id is %i \n", buf_id));
 		OpenAL_ErrorCheck( alDeleteBuffers(1, &buf_id), return );
 	}
 

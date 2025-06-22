@@ -594,10 +594,12 @@ static void gr_string_old(float sx,
 
 		// Calculate the auto scale factor
 		float auto_scale_factor = autoSizedFont / height;
+		mprintf(("FFF auto_scale_factor %f, height %f \n", autoSizedFont, height));
 		scale_factor *= auto_scale_factor;
 	}
 
 	scale_factor *= scaleMultiplier;
+	mprintf(("FFF scale_factor %f\n", scale_factor));
 
 	int letter;
 	while (s < end) {
@@ -805,8 +807,10 @@ void gr_string(float sx, float sy, const char* s, int resize_mode, float scaleMu
 		float scale_factor = (nvgFont->getScaleBehavior() && !Fred_running) ? get_font_scale_factor() : 1.0f;
 		scale_factor *= scaleMultiplier;
 
-		float originalSize = nvgFont->getSize();
-		float scaledSize = originalSize * scale_factor;
+		float originalSize = nvgFont->getFontSize();
+		float scaledSize = originalSize;
+
+		//mprintf(("FFF scale_factor %f, scaleMultiplier %f, originalSize %f, scaledSize %f\n", scale_factor, scaleMultiplier, originalSize, scaledSize));
 
 		// Calculate the offset to center the text
 		float offsetX = 0.0f;

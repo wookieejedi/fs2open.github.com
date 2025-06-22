@@ -2525,18 +2525,24 @@ int bm_make_render_target(int width, int height, int flags) {
 	int bpp = 32;
 	int size = 0;
 
+	if (w <= 0 || h <= 0)
+		mprintf(("ZZZZ ERROR A \n"));
+	mprintf(("ZZZZ A %i, %i \n", w, h));
+
 	Assertion(bm_inited, "bmpman must be initialized before this function can be called!");
 
 	// Find an open slot (starting from the end)
 	int n = find_block_of(1);
-
+	mprintf(("ZZZ make_render_target n = %i \n", n));
 	// Out of bitmap slots
 	if (n == -1)
 		return -1;
 
-	if (!gr_bm_make_render_target(n, &w, &h, &bpp, &mm_lvl, flags))
+	if (!gr_bm_make_render_target(n, &w, &h, &bpp, &mm_lvl, flags)) {
+		mprintf(("ZZZ make_render_target -1 \n"));
 		return -1;
-
+	}
+	mprintf(("ZZZZ here with n %i, w %i, h %i \n",n,w,h));
 	Assert(mm_lvl > 0);
 
 	if (flags & BMP_FLAG_RENDER_TARGET_STATIC) {
@@ -2560,7 +2566,7 @@ int bm_make_render_target(int width, int height, int flags) {
 
 	entry->type = (flags & BMP_FLAG_RENDER_TARGET_STATIC) ? BM_TYPE_RENDER_TARGET_STATIC : BM_TYPE_RENDER_TARGET_DYNAMIC;
 	entry->signature = Bm_next_signature++;
-	sprintf_safe(entry->filename, "RT_%dx%d+%d", w, h, bpp);
+	mprintf(("ZZZ entry->filename %s \n", entry->filename));
 	entry->bm.w = (short)w;
 	entry->bm.h = (short)h;
 	entry->bm.rowsize = (short)w;
@@ -2574,6 +2580,7 @@ int bm_make_render_target(int width, int height, int flags) {
 	entry->dir_type = CF_TYPE_ANY;
 
 	entry->handle = n;
+	mprintf(("ZZZ make_render_target entry->handle = %i \n", n));
 
 	if (entry->mem_taken) {
 		entry->bm.data = (ptr_u)bm_malloc(n, entry->mem_taken);
@@ -3287,6 +3294,7 @@ static int find_block_of(int n, int start_block)
 			if (entry.type == BM_TYPE_NONE) {
 				if (cnt == 0) {
 					nstart = get_handle(block_idx, entry_idx);
+					mprintf(("OOO1 nstart = %i, block_idx = %i, entry_idx = %i\n", nstart, block_idx, entry_idx));
 				}
 
 				cnt++;
@@ -3295,6 +3303,7 @@ static int find_block_of(int n, int start_block)
 			}
 
 			if (cnt == n) {
+				mprintf(("OOO2 nstart = %i, cnt = %i, n = %i\n", nstart, cnt, n));
 				return nstart;
 			}
 
@@ -3304,6 +3313,7 @@ static int find_block_of(int n, int start_block)
 
 	// If we are here it means that we could not find a block to store the bitmap blocks in.
 	// In that case we just allocate a new block and try to allocate the block in that
+	mprintf(("OOO 3 \n"));
 	allocate_new_block();
 
 	// This call is sure to succeed since we now have a contiguous block of size BM_BLOCK_SIZE and n must be less than that

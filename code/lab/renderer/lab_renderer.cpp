@@ -567,7 +567,7 @@ void LabRenderer::useBackground(const SCP_string& mission_name) {
 					return;
 				}
 			}
-
+			mprintf(("ZZZ J5\n"));
 			gr_screen.envmap_render_target = bm_make_render_target(size, size, gen_flags);
 		}
 	}

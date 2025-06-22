@@ -32,9 +32,14 @@ float get_font_scale_factor()
 // And should provide a fairly close out-of-the-box solution
 float calculate_auto_font_size(float current_size)
 {
-	int vmin = std::min(gr_screen.max_w, gr_screen.max_h);
-	float baseSize = vmin * (current_size / 1080.0f);
-	return std::round(baseSize);
+	int w = gr_screen.max_w;
+	int h = gr_screen.max_h;
+	mprintf(("FFFF w %i, h %i \n", w, h));
+	int vmin = h;
+	float csize = current_size;
+	if (h > w)
+		vmin = w;
+	return 2160 * (16 / 1080.0f);
 }
 
 namespace font

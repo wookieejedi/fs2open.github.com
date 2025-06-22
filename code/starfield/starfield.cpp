@@ -912,7 +912,7 @@ static void environment_map_gen()
 		Mission_env_map = bm_load(The_mission.envmap_name);
 		return;
 	}
-
+	mprintf(("ZZZ J2\n"));
 	gr_screen.envmap_render_target = bm_make_render_target(size, size, gen_flags);
 }
 
@@ -940,7 +940,7 @@ static void irradiance_map_gen()
 		gen_flags &= ~BMP_FLAG_RENDER_TARGET_STATIC;
 		gen_flags |= BMP_FLAG_RENDER_TARGET_DYNAMIC;
 	}
-
+	mprintf(("ZZZ J1\n"));
 	gr_screen.irrmap_render_target = bm_make_render_target(irr_size, irr_size, gen_flags);
 	IRRMAP = gr_screen.irrmap_render_target;
 }

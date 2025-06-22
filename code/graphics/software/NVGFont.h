@@ -23,7 +23,7 @@ namespace font
 		~NVGFont() override = default;
 
 		int getHandle() const { return m_handle; }
-		float getSize() const { return m_size; }
+		float getFontSize() const { return m_size; }
 		float getLetterSpacing() const { return m_letterSpacing; }
 		float getTabWidth() const { return m_tabWidth; }
 		font* getSpecialCharacterFont() const { return m_specialCharacters; }

@@ -101,7 +101,9 @@ namespace
 			stuff_boolean(&autoSize);
 
 			if (autoSize && !Fred_running) {
+				mprintf(("FFF size OG %f \n", size));
 				size = calculate_auto_font_size(size);
+				mprintf(("FFF size scaled %f \n", size));
 			}
 		}
 

@@ -818,7 +818,8 @@ void batching_add_line(vec3d *start, vec3d *end, float widthStart, float widthEn
 		auto previous_target = gr_screen.rendering_to_texture;
 
 		//The texture needs to be colored white, otherwise the line will render
-		//as black (or invisible if in translucent mode) no matter which color the user picks		
+		//as black (or invisible if in translucent mode) no matter which color the user picks	
+		mprintf(("ZZZ J4\n"));	
 		lineTexture = bm_make_render_target(1, 1, BMP_FLAG_RENDER_TARGET_STATIC);
 		bm_set_render_target(lineTexture);			
 		color temp = gr_screen.current_color; 			//Store our working color

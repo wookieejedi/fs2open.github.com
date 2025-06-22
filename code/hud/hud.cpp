@@ -2068,6 +2068,7 @@ void hud_render_all(float frametime)
 	hud_render_gauges(-1, frametime);
 
 	// start rendering cockpit dependent gauges if possible
+	mprintf(("ZZZ hud_render_all on cockpit close = %i \n", (int)Player_displays.size()));
 	for ( i = 0; i < (int)Player_displays.size(); ++i ) {
 		hud_render_gauges(i, frametime);
 	}
@@ -2092,8 +2093,8 @@ void hud_render_gauges(int cockpit_display_num, float frametime)
 		if ( !sip->hud_enabled ) {
 			return;
 		}
-
 		render_target = ship_start_render_cockpit_display(cockpit_display_num);
+		mprintf(("ZZZ WW1 cockpit_display_num %i, render_target %i \n", cockpit_display_num, render_target));
 
 		if ( render_target <= 0 ) {
 			return;
@@ -2107,10 +2108,10 @@ void hud_render_gauges(int cockpit_display_num, float frametime)
 	// Check if this ship has its own HUD gauges. 
 	if ( sip->hud_enabled ) {
 		num_gauges = sip->hud_gauges.size();
-
+		mprintf(("ZZZ Starting guage render \n"));
 		for(j = 0; j < num_gauges; j++) {
 			GR_DEBUG_SCOPE("Render HUD gauge");
-
+			//mprintf(("Render gague %s \n", sip->hud_gauges[j]->getConfigName().c_str()));
 			// only preprocess gauges if we're not rendering to cockpit
 			if ( cockpit_display_num < 0 ) {
 				sip->hud_gauges[j]->preprocess();
@@ -2155,10 +2156,12 @@ void hud_render_gauges(int cockpit_display_num, float frametime)
 	}
 
 	if ( cockpit_display_num >= 0 ) {
+		mprintf(("ZZZ WW2 cockpit_display_num %i, render_target %i \n", cockpit_display_num, render_target));
 		ship_end_render_cockpit_display(cockpit_display_num);
 
 		if ( gr_screen.rendering_to_texture != -1 ) {
 			// are we still are rendering to a texture at this point? uh oh.
+			mprintf(("XXX R ruhho display target %i \n", cockpit_display_num));
 			bm_set_render_target(-1);
 		}
 	}

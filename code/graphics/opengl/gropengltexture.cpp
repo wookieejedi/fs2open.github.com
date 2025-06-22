@@ -1738,6 +1738,7 @@ int opengl_set_render_target( int slot, int face, int is_static )
 		// done with this render target so lets move on
 		render_target = NULL;
 
+		mprintf(("XXX Setting render target to false \n"));
 		GL_rendering_to_texture = false;
 
 		GL_CHECK_FOR_ERRORS("end of set_render_target(0)");
@@ -1787,6 +1788,8 @@ int opengl_set_render_target( int slot, int face, int is_static )
 	// save current fbo for later use
 	render_target = fbo;
 
+	mprintf(("XXX Setting render target to true \n"));
+	mprintf(("  slot %i, face %i, is_static %i \n", slot, face, is_static));
 	GL_rendering_to_texture = true;
 
 	GL_CHECK_FOR_ERRORS("end of set_render_target()");
@@ -1797,6 +1800,10 @@ int opengl_set_render_target( int slot, int face, int is_static )
 int opengl_make_render_target( int handle, int *w, int *h, int *bpp, int *mm_lvl, int flags )
 {
 	GR_DEBUG_SCOPE("Make OpenGL render target");
+
+	mprintf(("ZZZ E, %i, %i \n", *w, *h));
+	if (GL_rendering_to_texture)
+		mprintf(("ZZZZ C %i, %i \n", *w, *h));
 
 	Assert( !GL_rendering_to_texture );
 

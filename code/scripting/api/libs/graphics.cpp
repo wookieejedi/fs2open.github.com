@@ -1659,7 +1659,7 @@ ADE_FUNC(createTexture, l_Graphics, "[number Width=512, number Height=512, enume
 		else if(e->index == LE_TEXTURE_DYNAMIC)
 			t = BMP_FLAG_RENDER_TARGET_DYNAMIC;
 	}
-
+	mprintf(("ZZZ J3\n"));
 	int idx = bm_make_render_target(w, h, t);
 
 	if(idx < 0)
