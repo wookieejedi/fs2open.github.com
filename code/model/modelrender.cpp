@@ -2971,6 +2971,9 @@ void model_render_queue(const model_render_params* interp, model_draw_list* scen
 
 	// MARKED!
 	if ( !( model_flags & MR_NO_TEXTURING ) && !( model_flags & MR_NO_INSIGNIA) ) {
+		decals::creation_info decal {
+
+		};
 		scene->add_insignia(interp, pm, detail_level, interp->get_insignia_bitmap());
 	}
 

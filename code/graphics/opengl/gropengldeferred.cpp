@@ -9,6 +9,7 @@
 #include "gropengltnl.h"
 
 #include "graphics/2d.h"
+#include "graphics/light.h"
 #include "graphics/matrix.h"
 #include "graphics/util/UniformAligner.h"
 #include "graphics/util/UniformBuffer.h"
@@ -254,7 +255,7 @@ void gr_opengl_deferred_lighting_finish()
 	using namespace graphics;
 
 	// We need to precompute how many elements we are going to need
-	size_t num_data_elements = Lights.size();
+	size_t num_data_elements = Lights.size() + 1;
 
 	// Get a uniform buffer for our data
 	auto light_buffer = gr_get_uniform_buffer(uniform_block_type::Lights, num_data_elements);
@@ -286,6 +287,8 @@ void gr_opengl_deferred_lighting_finish()
 		case Light_Type::Tube:
 			cylinder_lights.push_back(l);
 			break;
+		case Light_Type::Ambient:
+			UNREACHABLE("Multiple ambient lights are not supported!");
 		}
 	}
 	{
@@ -312,35 +315,51 @@ void gr_opengl_deferred_lighting_finish()
 		header->invScreenHeight = 1.0f / gr_screen.max_h;
 		header->nearPlane = gr_near_plane;
 
+		{
+			//Prepare ambient light
+			light& l = full_frame_lights.emplace_back();
+			vec3d ambient;
+			gr_get_ambient_light(&ambient);
+			l.r = ambient.xyz.x;
+			l.g = ambient.xyz.y;
+			l.b = ambient.xyz.z;
+			l.type = Light_Type::Ambient;
+			l.intensity = 1.f;
+			l.source_radius = 0.f;
+		}
+
 		// Only the first directional light uses shaders so we need to know when we already saw that light
 		bool first_directional = true;
 
 		for (auto& l : full_frame_lights) {
 			auto light_data = prepare_light_uniforms(l, light_uniform_aligner);
-			if (Shadow_quality != ShadowQuality::Disabled) {
-				light_data->enable_shadows = first_directional ? 1 : 0;
+
+			if (l.type == Light_Type::Directional ) {
+				if (Shadow_quality != ShadowQuality::Disabled) {
+					light_data->enable_shadows = first_directional ? 1 : 0;
+				}
+
+				// Global light direction should match shadow light direction
+				if (first_directional) {
+					global_light = &l;
+					global_light_diffuse = light_data->diffuseLightColor;
+
+					first_directional = false;
+				}
+
+				vec4 light_dir;
+				light_dir.xyzw.x = -l.vec.xyz.x;
+				light_dir.xyzw.y = -l.vec.xyz.y;
+				light_dir.xyzw.z = -l.vec.xyz.z;
+				light_dir.xyzw.w = 0.0f;
+				vec4 view_dir;
+
+				vm_vec_transform(&view_dir, &light_dir, &gr_view_matrix);
+
+				light_data->lightDir.xyz.x = view_dir.xyzw.x;
+				light_data->lightDir.xyz.y = view_dir.xyzw.y;
+				light_data->lightDir.xyz.z = view_dir.xyzw.z;
 			}
-
-			// Global light direction should match shadow light direction
-			if (first_directional) {
-				global_light = &l;
-				global_light_diffuse = light_data->diffuseLightColor;
-			}
-
-			vec4 light_dir;
-			light_dir.xyzw.x = -l.vec.xyz.x;
-			light_dir.xyzw.y = -l.vec.xyz.y;
-			light_dir.xyzw.z = -l.vec.xyz.z;
-			light_dir.xyzw.w = 0.0f;
-			vec4 view_dir;
-
-			vm_vec_transform(&view_dir, &light_dir, &gr_view_matrix);
-
-			light_data->lightDir.xyz.x = view_dir.xyzw.x;
-			light_data->lightDir.xyz.y = view_dir.xyzw.y;
-			light_data->lightDir.xyz.z = view_dir.xyzw.z;
-
-			first_directional = false;
 		}
 		for (auto& l : sphere_lights) {
 			auto light_data = prepare_light_uniforms(l, light_uniform_aligner);
