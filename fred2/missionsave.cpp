@@ -666,6 +666,10 @@ void CFred_mission_save::save_ai_goals(ai_goal *goalp, int ship)
 					str = "ai-chase-ship-class";
 					break;
 
+				case AI_GOAL_CHASE_SHIP_TYPE:
+					str = "ai-chase-ship-type";
+					break;
+
 				case AI_GOAL_GUARD:
 					str = "ai-guard";
 					break;
@@ -1348,6 +1352,24 @@ int CFred_mission_save::save_campaign_file(const char *pathname)
 		optional_string_fred("$Flags:");
 		parse_comments();
 		fout(" %d\n", Campaign.flags);
+	}
+
+	if (Mission_save_format != FSO_FORMAT_RETAIL && !Campaign.custom_data.empty()) {
+		if (optional_string_fred("$begin_custom_data_map")) {
+			parse_comments(2);
+		} else {
+			fout("\n$begin_custom_data_map");
+		}
+
+		for (const auto& pair : Campaign.custom_data) {
+			fout("\n   +Val: %s %s", pair.first.c_str(), pair.second.c_str());
+		}
+
+		if (optional_string_fred("$end_custom_data_map")) {
+			parse_comments();
+		} else {
+			fout("\n$end_custom_data_map");
+		}
 	}
 
 	// write out the ships and weapons which the player can start the campaign with
@@ -2794,6 +2816,7 @@ int CFred_mission_save::save_mission_info()
 			FRED_ENSURE_PROPERTY_VERSION_WITH_DEFAULT("+Steps:", 1, ";;FSO 23.1.0;;", 15, " %d", The_mission.volumetrics->steps);
 			FRED_ENSURE_PROPERTY_VERSION_WITH_DEFAULT("+Resolution:", 1, ";;FSO 23.1.0;;", 6, " %d", The_mission.volumetrics->resolution);
 			FRED_ENSURE_PROPERTY_VERSION_WITH_DEFAULT("+Oversampling:", 1, ";;FSO 23.1.0;;", 2, " %d", The_mission.volumetrics->oversampling);
+			FRED_ENSURE_PROPERTY_VERSION_WITH_DEFAULT("+Smoothing:", 1, ";;FSO 25.0.0;;", 0.f, " %f", The_mission.volumetrics->smoothing);
 			FRED_ENSURE_PROPERTY_VERSION_WITH_DEFAULT_F("+Heyney Greenstein Coefficient:", 1, ";;FSO 23.1.0;;", 0.2f, " %f", The_mission.volumetrics->henyeyGreensteinCoeff);
 			FRED_ENSURE_PROPERTY_VERSION_WITH_DEFAULT_F("+Sun Falloff Factor:", 1, ";;FSO 23.1.0;;", 1.0f, " %f", The_mission.volumetrics->globalLightDistanceFactor);
 			FRED_ENSURE_PROPERTY_VERSION_WITH_DEFAULT("+Sun Steps:", 1, ";;FSO 23.1.0;;", 6, " %d", The_mission.volumetrics->globalLightSteps);
@@ -2831,6 +2854,7 @@ int CFred_mission_save::save_mission_info()
 			bypass_comment(";;FSO 23.1.0;; +Steps:");
 			bypass_comment(";;FSO 23.1.0;; +Resolution:");
 			bypass_comment(";;FSO 23.1.0;; +Oversampling:");
+			bypass_comment(";;FSO 25.0.0;; +Smoothing:");
 			bypass_comment(";;FSO 23.1.0;; +Heyney Greenstein Coefficient:");
 			bypass_comment(";;FSO 23.1.0;; +Sun Falloff Factor:");
 			bypass_comment(";;FSO 23.1.0;; +Sun Steps:");

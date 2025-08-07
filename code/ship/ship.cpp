@@ -1757,6 +1757,7 @@ ship_info::ship_info()
 	collision_physics.bounce = 5.0;
 	collision_physics.friction = COLLISION_FRICTION_FACTOR;
 	collision_physics.rotation_factor = COLLISION_ROTATION_FACTOR;
+	collision_physics.rotation_mag_max = -1.0f;
 	collision_physics.reorient_mult = 1.0f;
 	collision_physics.landing_sound_idx = gamesnd_id();
 	collision_physics.collision_sound_light_idx = gamesnd_id();
@@ -2449,6 +2450,11 @@ static ::util::UniformRange<T_range> parse_ship_particle_random_range(const char
 
 particle::ParticleEffectHandle create_ship_legacy_particle_effect(LegacyShipParticleType type, float range, int bitmap, ::util::UniformFloatRange particle_num, ::util::UniformFloatRange radius, ::util::UniformFloatRange lifetime, ::util::UniformFloatRange velocity, float normal_variance, bool useNormal, float velocityInherit)
 {
+	// this is always invalid on standalone so just bail early
+	if (Is_standalone) {
+		return particle::ParticleEffectHandle::invalid();
+	}
+
 	//Unfortunately legacy ship effects did a lot of ad-hoc computation of effect parameters.
 	//To mimic this in the modern system, these ad-hoc parameters are represented as hard-coded modular curves applied to various parts of the effect
 	std::optional<modular_curves_entry> part_number_curve, lifetime_curve, radius_curve, velocity_curve;
@@ -3331,6 +3337,10 @@ static void parse_ship_values(ship_info* sip, const bool is_template, const bool
 		}
 		if(optional_string("+Rotation Factor:")) {
 			stuff_float(&sip->collision_physics.rotation_factor);
+		}
+		if (optional_string("+Rotation Magnitude Maximum:")) {
+			stuff_float(&sip->collision_physics.rotation_mag_max);
+			sip->collision_physics.rotation_mag_max *= PI / 180.0f;
 		}
 		if(optional_string("+Landing Max Forward Vel:")) {
 			stuff_float(&sip->collision_physics.landing_max_z);
@@ -8185,7 +8195,7 @@ void ship_render_player_ship(object* objp, const vec3d* cam_offset, const matrix
 	const bool renderShipModel = ( 
 		sip->flags[Ship::Info_Flags::Show_ship_model])
 		&& (!Show_ship_only_if_cockpits_enabled || Cockpit_active)
-		&& (!Viewer_mode || (Viewer_mode & VM_PADLOCK_ANY) || (Viewer_mode & VM_OTHER_SHIP) || (Viewer_mode & VM_TRACK));
+		&& (!Viewer_mode || (Viewer_mode & VM_PADLOCK_ANY) || (Viewer_mode & VM_OTHER_SHIP) || (Viewer_mode & VM_TRACK) || !(Viewer_mode & VM_EXTERNAL));
 	Cockpit_active = renderCockpitModel;
 
 	//Nothing to do
@@ -12198,8 +12208,12 @@ void change_ship_type(int n, int ship_type, int by_sexp)
 	animation::anim_set_initial_states(sp);
 
 	//Reassign sound stuff
-	if (!Fred_running)
+	if (!Fred_running) {
+		if (objp == Player_obj) {
+			hud_stop_looped_engine_sounds();
+		}
 		ship_assign_sound(sp);
+	}
 	
 	// Valathil - Reinitialize collision checks
 	obj_remove_collider(OBJ_INDEX(objp));
@@ -16312,6 +16326,9 @@ void ship_assign_sound(ship *sp)
 	objp = &Objects[sp->objnum];
 	sip = &Ship_info[sp->ship_info_index];
 
+	// clear out any existing assigned sounds --wookieejedi
+	obj_snd_delete_type(OBJ_INDEX(objp));
+
 	// Do subsystem sounds	
 	moveup = GET_FIRST(&sp->subsys_list);
 	while(moveup != END_OF_LIST(&sp->subsys_list)) {
@@ -17415,6 +17432,7 @@ static const char* ship_get_ai_target_display_name(int goal, const char* name)
 		// These goals need no special handling
 	case AI_GOAL_CHASE_WING:
 	case AI_GOAL_CHASE_SHIP_CLASS:
+	case AI_GOAL_CHASE_SHIP_TYPE:
 	case AI_GOAL_GUARD_WING:
 	case AI_GOAL_WAYPOINTS:
 	case AI_GOAL_WAYPOINTS_ONCE:
@@ -17448,7 +17466,7 @@ SCP_string ship_return_orders(ship* sp)
 
 	auto order_text = Ai_goal_text(aigp->ai_mode, aigp->ai_submode);
 	if (order_text == nullptr)
-		return SCP_string();
+		return {};
 
 	SCP_string outbuf = order_text;
 
@@ -17472,6 +17490,7 @@ SCP_string ship_return_orders(ship* sp)
 		break;
 
 	case AI_GOAL_CHASE_SHIP_CLASS:
+	case AI_GOAL_CHASE_SHIP_TYPE:
 		if (aigp->target_name) {
 			outbuf += XSTR("any ", -1);
 			outbuf += target_name;
@@ -17479,6 +17498,7 @@ SCP_string ship_return_orders(ship* sp)
 			outbuf = XSTR("no orders", 495);
 		}
 		break;
+
 
 	case AI_GOAL_CHASE:
 	case AI_GOAL_DOCK:
@@ -17517,7 +17537,7 @@ SCP_string ship_return_orders(ship* sp)
 		break;
 
 	default:
-		return SCP_string();
+		return {};
 	}
 
 	return outbuf;
@@ -19984,9 +20004,11 @@ void ship_move_subsystems(object *objp)
 	Assertion(objp->type == OBJ_SHIP, "ship_move_subsystems should only be called for ships!  objp type = %d", objp->type);
 	auto shipp = &Ships[objp->instance];
 	
-	// non-player ships that are playing dead do not process subsystems or turrets
-	if ((!(objp->flags[Object::Object_Flags::Player_ship]) || Player_use_ai) && Ai_info[shipp->ai_index].mode == AIM_PLAY_DEAD)
-		return;
+	// non-player ships that are playing dead do not process subsystems or turrets unless we're in the lab
+	if (gameseq_get_state() != GS_STATE_LAB) {
+		if ((!(objp->flags[Object::Object_Flags::Player_ship]) || Player_use_ai) && Ai_info[shipp->ai_index].mode == AIM_PLAY_DEAD)
+			return;
+	}
 
 	for (auto pss = GET_FIRST(&shipp->subsys_list); pss != END_OF_LIST(&shipp->subsys_list); pss = GET_NEXT(pss))
 	{
