@@ -159,7 +159,7 @@ namespace particle
 
 		part->pos = info->pos;
 		part->velocity = info->vel;
-		part->age = 0.0f;
+		part->age = info->starting_age;
 		part->max_life = info->lifetime;
 		part->radius = info->rad;
 		part->bitmap = info->bitmap;
@@ -428,12 +428,15 @@ namespace particle
 		}
 
 		if (part->length != 0.0f) {
-			vec3d p0 = part->pos;
+			vec3d p0 = p_pos;
 
 			vec3d p1;
 			vm_vec_copy_normalize_safe(&p1, &part->velocity);
+			if (part->attached_objnum >= 0) {
+				vm_vec_unrotate(&p1, &p1, &Objects[part->attached_objnum].orient);
+			}
 			p1 *= part->length;
-			p1 += part->pos;
+			p1 += p_pos;
 
 			batching_add_laser(framenum + cur_frame, &p0, radius, &p1, radius);
 		}
