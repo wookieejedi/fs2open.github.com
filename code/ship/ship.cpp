@@ -353,7 +353,8 @@ flag_def_list_new<Model::Subsystem_Flags> Subsystem_flags[] = {
 	{ "don't autorepair if disabled", Model::Subsystem_Flags::No_autorepair_if_disabled,        true, false },
 	{ "share fire direction",       Model::Subsystem_Flags::Share_fire_direction,               true, false },
 	{ "no damage spew",             Model::Subsystem_Flags::No_sparks,                          true, false },
-	{ "no impact debris",           Model::Subsystem_Flags::No_impact_debris,                   true, false },
+	{ "disable all generic impact debris",    Model::Subsystem_Flags::Disable_all_generic_impact_debris,    true, false },
+	{ "disable all generic explosion debris", Model::Subsystem_Flags::Disable_all_generic_explosion_debris, true, false },
 	{ "hide turret from loadout stats", Model::Subsystem_Flags::Hide_turret_from_loadout_stats, true, false },
 	{ "turret has distant firepoint", Model::Subsystem_Flags::Turret_distant_firepoint,         true, false },
 	{ "override submodel impact",   Model::Subsystem_Flags::Override_submodel_impact,           true, false },
@@ -412,7 +413,8 @@ flag_def_list_new<Info_Flags> Ship_flags[] = {
 	{ "don't clamp max velocity",	Info_Flags::Dont_clamp_max_velocity,	true, false },
 	{ "instantaneous acceleration",	Info_Flags::Instantaneous_acceleration,	true, false },
 	{ "large ship deathroll",		Info_Flags::Large_ship_deathroll,	true, false },
-	{ "no impact debris",			Info_Flags::No_impact_debris,		true, false },
+	{ "disable all generic impact debris",    Info_Flags::Disable_all_generic_impact_debris,    true, false },
+	{ "disable all generic explosion debris", Info_Flags::Disable_all_generic_explosion_debris, true, false },
     // to keep things clean, obsolete options go last
     { "ballistic primaries",		Info_Flags::Ballistic_primaries,	false, false }
 };
@@ -1073,6 +1075,9 @@ void ship_info::clone(const ship_info& other)
 
 	impact_spew = other.impact_spew;
 	damage_spew = other.damage_spew;
+	death_roll_exp_particles = other.death_roll_exp_particles;
+	pre_death_exp_particles = other.pre_death_exp_particles;
+	propagating_exp_particles = other.propagating_exp_particles;
 	split_particles = other.split_particles;
 	knossos_end_particles = other.knossos_end_particles;
 	regular_end_particles = other.regular_end_particles;
@@ -1352,6 +1357,8 @@ void ship_info::clone(const ship_info& other)
 	ship_passive_arcs = other.ship_passive_arcs;
 
 	glowpoint_bank_override_map = other.glowpoint_bank_override_map;
+
+	default_subsys_death_effect = other.default_subsys_death_effect; 
 }
 
 void ship_info::move(ship_info&& other)
@@ -1439,6 +1446,9 @@ void ship_info::move(ship_info&& other)
 
 	std::swap(impact_spew, other.impact_spew);
 	std::swap(damage_spew, other.damage_spew);
+	std::swap(death_roll_exp_particles, other.death_roll_exp_particles);
+	std::swap(pre_death_exp_particles, other.pre_death_exp_particles);
+	std::swap(propagating_exp_particles, other.propagating_exp_particles);
 	std::swap(split_particles, other.split_particles);
 	std::swap(knossos_end_particles, other.knossos_end_particles);
 	std::swap(regular_end_particles, other.regular_end_particles);
@@ -1698,6 +1708,8 @@ void ship_info::move(ship_info&& other)
 
 	animations = std::move(other.animations);
 	cockpit_animations = std::move(other.cockpit_animations);
+
+	default_subsys_death_effect = other.default_subsys_death_effect;
 }
 
 ship_info &ship_info::operator= (ship_info&& other) noexcept
@@ -1807,6 +1819,10 @@ ship_info::ship_info()
 	// default values from shipfx.cpp
 	static auto default_damage_spew = default_ship_particle_effect(LegacyShipParticleType::DAMAGE_SPEW, 1, 0, 1.3f, 0.7f, 1.0f, 1.0f, 12.0f, 3.0f, 0.0f, 1.0f, particle::Anim_bitmap_id_smoke, 0.7f);
 	damage_spew = default_damage_spew;
+
+	death_roll_exp_particles = particle::ParticleEffectHandle::invalid();
+	pre_death_exp_particles = particle::ParticleEffectHandle::invalid();
+	propagating_exp_particles = particle::ParticleEffectHandle::invalid();
 
 	static auto default_split_particles = default_ship_particle_effect(LegacyShipParticleType::SPLIT_PARTICLES, 80, 40, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 0.0f, 2.0f, 1.0f, particle::Anim_bitmap_id_smoke2, 1.f);
 	split_particles = default_split_particles;
@@ -2091,6 +2107,8 @@ ship_info::ship_info()
 	glowpoint_bank_override_map.clear();
 
 	ship_passive_arcs.clear();
+
+	default_subsys_death_effect = particle::ParticleEffectHandle::invalid();
 }
 
 ship_info::~ship_info()
@@ -2689,7 +2707,7 @@ static void parse_allowed_weapons(ship_info *sip, const bool is_primary, const b
 				break;
 			}
 
-			num_allowed = (int)stuff_int_list(allowed_weapons, MAX_WEAPON_TYPES, WEAPON_LIST_TYPE);
+			num_allowed = sz2i(stuff_int_list(allowed_weapons, MAX_WEAPON_TYPES, ParseLookupType::WEAPON_LIST_TYPE));
 
 			// actually say which weapons are allowed
 			for ( i = 0; i < num_allowed; i++ )
@@ -2729,9 +2747,9 @@ static void parse_weapon_bank(ship_info *sip, bool is_primary, int *num_banks, i
 	{
 		// get weapon list
 		if (num_banks != NULL)
-			*num_banks = (int)stuff_int_list(bank_default_weapons, max_banks, WEAPON_LIST_TYPE);
+			*num_banks = sz2i(stuff_int_list(bank_default_weapons, max_banks, ParseLookupType::WEAPON_LIST_TYPE));
 		else
-			stuff_int_list(bank_default_weapons, max_banks, WEAPON_LIST_TYPE);
+			stuff_int_list(bank_default_weapons, max_banks, ParseLookupType::WEAPON_LIST_TYPE);
 	}
 
 	// we initialize to the previous parse, which presumably worked
@@ -2740,7 +2758,7 @@ static void parse_weapon_bank(ship_info *sip, bool is_primary, int *num_banks, i
 	if (optional_string(bank_capacities_str))
 	{
 		// get capacity list
-		num_bank_capacities = (int)stuff_int_list(bank_capacities, max_banks, RAW_INTEGER_TYPE);
+		num_bank_capacities = sz2i(stuff_int_list(bank_capacities, max_banks, ParseLookupType::RAW_INTEGER_TYPE));
 	}
 
 	// num_banks can be null if we're parsing weapons for a turret
@@ -3304,7 +3322,7 @@ static void parse_ship_values(ship_info* sip, const bool is_template, const bool
 	}
 
 	if(optional_string("$Detail distance:")) {
-		sip->num_detail_levels = (int)stuff_int_list(sip->detail_distance, MAX_SHIP_DETAIL_LEVELS, RAW_INTEGER_TYPE);
+		sip->num_detail_levels = sz2i(stuff_int_list(sip->detail_distance, MAX_SHIP_DETAIL_LEVELS, ParseLookupType::RAW_INTEGER_TYPE));
 	}
 
 	if(optional_string("$Collision LOD:")) {
@@ -3738,6 +3756,10 @@ static void parse_ship_values(ship_info* sip, const bool is_template, const bool
 	if (optional_string("$Aims at Flight Cursor:")) {
 		stuff_boolean(&sip->aims_at_flight_cursor);
 
+		if (optional_string("+Secondary Aims at Flight Cursor:")) {
+			stuff_boolean(&sip->aims_at_flight_cursor_secondary);
+		}
+
 		if (optional_string("+Extent:")) {
 			stuff_float(&sip->flight_cursor_aim_extent);
 			sip->flight_cursor_aim_extent = fl_radians(sip->flight_cursor_aim_extent);
@@ -3835,7 +3857,9 @@ static void parse_ship_values(ship_info* sip, const bool is_template, const bool
 		sip->explosion_splits_ship = sip->explosion_propagates == 1;
 	}
 
-	if(optional_string("$Propagating Expl Radius Multiplier:")){
+	if (optional_string("$Propagating Explosion Effect:")) {
+		sip->propagating_exp_particles = particle::util::parseEffect(sip->name);
+	} else if (optional_string("$Propagating Expl Radius Multiplier:")) {
 		stuff_float(&sip->prop_exp_rad_mult);
 		if(sip->prop_exp_rad_mult <= 0) {
 			// on invalid value return to default setting
@@ -3854,7 +3878,9 @@ static void parse_ship_values(ship_info* sip, const bool is_template, const bool
 			sip->death_roll_base_time = 2;
 	}
 
-	if(optional_string("$Death-Roll Explosion Radius Mult:")){
+	if (optional_string("$Death Roll Explosion Effect:")) {
+		sip->death_roll_exp_particles = particle::util::parseEffect(sip->name);
+	} else if (optional_string("$Death-Roll Explosion Radius Mult:")) {
 		stuff_float(&sip->death_roll_r_mult);
 		if (sip->death_roll_r_mult < 0)
 			sip->death_roll_r_mult = 0;
@@ -3866,7 +3892,9 @@ static void parse_ship_values(ship_info* sip, const bool is_template, const bool
 			sip->death_roll_time_mult = 1.0f;
 	}
 
-	if(optional_string("$Death FX Explosion Radius Mult:")){
+	if (optional_string("$Death FX Explosion Effect:")) {
+		sip->pre_death_exp_particles = particle::util::parseEffect(sip->name);
+	} else if (optional_string("$Death FX Explosion Radius Mult:")) {
 		stuff_float(&sip->death_fx_r_mult);
 		if (sip->death_fx_r_mult < 0)
 			sip->death_fx_r_mult = 0;
@@ -4435,6 +4463,10 @@ static void parse_ship_values(ship_info* sip, const bool is_template, const bool
 				flag_found = true;
 				sip->flags.set(Ship::Info_Flags::Dont_clamp_max_velocity);
 			}
+			if (!stricmp(cur_flag, "no impact debris")) {
+				flag_found = true;
+				sip->flags.set(Ship::Info_Flags::Disable_all_generic_impact_debris);
+			}
 
 			if ( !flag_found && (ship_type_index < 0) )
 				Warning(LOCATION, "Bogus string in ship flags: %s\n", cur_flag);
@@ -4954,7 +4986,7 @@ static void parse_ship_values(ship_info* sip, const bool is_template, const bool
 		else if ( optional_string("$Afterburner Particle Bitmap:") )
 			afterburner = true;
 		else if ( optional_string("$Thruster Effect:") ) {
-			afterburner = true;
+			afterburner = false;
 			modern_particle = true;
 		}
 		else if ( optional_string("$Afterburner Effect:") ) {
@@ -5310,8 +5342,8 @@ static void parse_ship_values(ship_info* sip, const bool is_template, const bool
 			WarningEx(LOCATION, "%s '%s'\nIFF colour when IFF is \"%s\" invalid!", info_type_name, sip->name, iff_2);
 
 		// Set the color
-		required_string("+As Color:");
-		stuff_int_list(iff_color_data, 3, RAW_INTEGER_TYPE);
+		required_string_either("+As Color:", "+As Colour:", true);
+		stuff_int_list(iff_color_data, 3, ParseLookupType::RAW_INTEGER_TYPE);
 		sip->ship_iff_info[{iff_data[0],iff_data[1]}] = iff_init_color(iff_color_data[0], iff_color_data[1], iff_color_data[2]);
 	}
 
@@ -5424,23 +5456,23 @@ static void parse_ship_values(ship_info* sip, const bool is_template, const bool
 			new_info.width = 0.0f;
 		}
 
-		if (optional_string("+Primary color 1:")) {
+		if (optional_string_either("+Primary color 1:", "+Primary colour 1:") >= 0) {
 			int rgb[3];
-			stuff_int_list(rgb, 3, RAW_INTEGER_TYPE);
+			stuff_int_list(rgb, 3, ParseLookupType::RAW_INTEGER_TYPE);
 			gr_init_color(&new_info.primary_color_1, rgb[0], rgb[1], rgb[2]);
 		} else {
 			new_info.primary_color_1 = Arc_color_damage_p1;
 		}
-		if (optional_string("+Primary color 2:")) {
+		if (optional_string_either("+Primary color 2:", "+Primary colour 2:") >= 0) {
 			int rgb[3];
-			stuff_int_list(rgb, 3, RAW_INTEGER_TYPE);
+			stuff_int_list(rgb, 3, ParseLookupType::RAW_INTEGER_TYPE);
 			gr_init_color(&new_info.primary_color_2, rgb[0], rgb[1], rgb[2]);
 		} else {
 			new_info.primary_color_2 = Arc_color_damage_p2;
 		}
-		if (optional_string("+Secondary color:")) {
+		if (optional_string_either("+Secondary color:", "+Secondary colour:") >= 0) {
 			int rgb[3];
-			stuff_int_list(rgb, 3, RAW_INTEGER_TYPE);
+			stuff_int_list(rgb, 3, ParseLookupType::RAW_INTEGER_TYPE);
 			gr_init_color(&new_info.secondary_color, rgb[0], rgb[1], rgb[2]);
 		} else {
 			new_info.secondary_color = Arc_color_damage_s1;
@@ -5486,6 +5518,10 @@ static void parse_ship_values(ship_info* sip, const bool is_template, const bool
 		}
 
 		required_string("$end_custom_strings");
+	}
+
+	if (optional_string("$Default Subsystem Death Effect:")) {
+		sip->default_subsys_death_effect = particle::util::parseEffect(sip->name);
 	}
 
 	if(optional_string("$Default Subsystem Debris Flame Effect:"))
@@ -5595,8 +5631,11 @@ static void parse_ship_values(ship_info* sip, const bool is_template, const bool
 				sp->turret_max_bomb_ownage = -1;
 				sp->turret_max_target_ownage = -1;
 				sp->density = 1.0f;
+        
+				sp->death_effect = particle::ParticleEffectHandle::invalid();
 				sp->debris_flame_particles = particle::ParticleEffectHandle::invalid();
 				sp->shrapnel_flame_particles = particle::ParticleEffectHandle::invalid();
+
 			}
 			sfo_return = stuff_float_optional(&percentage_of_hits);
 			if(sfo_return==2)
@@ -5783,6 +5822,10 @@ static void parse_ship_values(ship_info* sip, const bool is_template, const bool
 				}
 			}
 
+			if (optional_string("$Subsystem Death Effect:")) {
+				sp->death_effect = particle::util::parseEffect(sip->name);
+			}
+
 			if (optional_string("$Debris Density:")) {
 				stuff_float(&sp->density);
 			}
@@ -5800,7 +5843,25 @@ static void parse_ship_values(ship_info* sip, const bool is_template, const bool
                 SCP_vector<SCP_string> errors;
                 flagset<Model::Subsystem_Flags> tmp_flags;
                 parse_string_flag_list(tmp_flags, Subsystem_flags, Num_subsystem_flags, &errors);
-                
+ 
+				// Map of deprecated strings to their new flags
+				static const SCP_unordered_map<SCP_string, Model::Subsystem_Flags, SCP_string_lcase_hash, SCP_string_lcase_equal_to>
+				deprecated_map = {
+					{"no impact debris", Model::Subsystem_Flags::Disable_all_generic_impact_debris},
+					// { "old name", Model::Subsystem_Flags::New_flag },   // future additions
+				};
+
+				// Walk through errors, remap if deprecated
+				for (auto it = errors.begin(); it != errors.end();) {
+					auto found = deprecated_map.find(*it);
+					if (found != deprecated_map.end()) {
+						tmp_flags.set(found->second);
+						it = errors.erase(it); // remove so no bogus warning
+					} else {
+						++it;
+					}
+				}
+
                 if (optional_string("+noreplace")) {
                     sp->flags |= tmp_flags;
                 }
@@ -9459,19 +9520,27 @@ static void ship_dying_frame(object *objp, int ship_num)
 
 				// Get a random point on the surface of a submodel
 				vec3d pnt1 = submodel_get_random_point(pm->id, pm->detail[0]);
-
 				model_instance_local_to_global_point(&outpnt, &pnt1, shipp->model_instance_num, pm->detail[0], &objp->orient, &objp->pos );
 
-				float rad = objp->radius*0.1f;
+				if (sip->death_roll_exp_particles.isValid()) {
+					vec3d center_to_point = outpnt - objp->pos;
+					vm_vec_normalize(&center_to_point);
+					auto source = particle::ParticleManager::get()->createSource(sip->death_roll_exp_particles);
+					source->setHost(std::make_unique<EffectHostObject>(objp, pnt1));
+					source->setNormal(center_to_point);
+					source->finishCreation();
+				} else {
+					float rad = objp->radius*0.1f;
 				
-				if (sip->death_roll_r_mult != 1.0f)
-					rad *= sip->death_roll_r_mult;
+					if (sip->death_roll_r_mult != 1.0f)
+						rad *= sip->death_roll_r_mult;
 
-				int fireball_type = fireball_ship_explosion_type(sip);
-				if(fireball_type < 0) {
-					fireball_type = FIREBALL_EXPLOSION_LARGE1 + Random::next(FIREBALL_NUM_LARGE_EXPLOSIONS);
+					int fireball_type = fireball_ship_explosion_type(sip);
+					if(fireball_type < 0) {
+						fireball_type = FIREBALL_EXPLOSION_LARGE1 + Random::next(FIREBALL_NUM_LARGE_EXPLOSIONS);
+					}
+					fireball_create( &outpnt, fireball_type, FIREBALL_LARGE_EXPLOSION, OBJ_INDEX(objp), rad, false, &objp->phys_info.vel );
 				}
-				fireball_create( &outpnt, fireball_type, FIREBALL_LARGE_EXPLOSION, OBJ_INDEX(objp), rad, false, &objp->phys_info.vel );
 				// start the next fireball up in the next 50 - 200 ms (2-3 per frame)
 				int min_time = 333;
 				int max_time = 500;
@@ -9562,24 +9631,33 @@ static void ship_dying_frame(object *objp, int ship_num)
 				}
 				// Find two random vertices on the model, then average them
 				// and make the piece start there.
-				vec3d tmp, outpnt;
+				vec3d avgpnt, outpnt;
 
 				// Gets two random points on the surface of a submodel [KNOSSOS]
 				vec3d pnt1 = submodel_get_random_point(pm->id, pm->detail[0]);
 				vec3d pnt2 = submodel_get_random_point(pm->id, pm->detail[0]);
 
-				vm_vec_avg( &tmp, &pnt1, &pnt2 );
-				model_instance_local_to_global_point(&outpnt, &tmp, pm, pmi, pm->detail[0], &objp->orient, &objp->pos );
+				vm_vec_avg( &avgpnt, &pnt1, &pnt2 );
+				model_instance_local_to_global_point(&outpnt, &avgpnt, pm, pmi, pm->detail[0], &objp->orient, &objp->pos );
 
-				float rad = objp->radius*0.40f;
+				if (sip->pre_death_exp_particles.isValid()) {
+					vec3d center_to_point = outpnt - objp->pos;
+					vm_vec_normalize(&center_to_point);
+					auto source = particle::ParticleManager::get()->createSource(sip->pre_death_exp_particles);
+					source->setHost(std::make_unique<EffectHostObject>(objp, avgpnt));
+					source->setNormal(center_to_point);
+					source->finishCreation();
+				} else {
+					float rad = objp->radius*0.40f;
 
-				rad *= sip->death_fx_r_mult;
+					rad *= sip->death_fx_r_mult;
 
-				int fireball_type = fireball_ship_explosion_type(sip);
-				if(fireball_type < 0) {
-					fireball_type = FIREBALL_EXPLOSION_MEDIUM;
+					int fireball_type = fireball_ship_explosion_type(sip);
+					if(fireball_type < 0) {
+						fireball_type = FIREBALL_EXPLOSION_MEDIUM;
+					}
+					fireball_create( &outpnt, fireball_type, FIREBALL_MEDIUM_EXPLOSION, OBJ_INDEX(objp), rad, false, &objp->phys_info.vel );
 				}
-				fireball_create( &outpnt, fireball_type, FIREBALL_MEDIUM_EXPLOSION, OBJ_INDEX(objp), rad, false, &objp->phys_info.vel );
 			}
 		}
 
@@ -14366,7 +14444,12 @@ int ship_fire_secondary( object *obj, int allow_swarm, bool rollback_shot )
 			}
 
 			matrix firing_orient;
-			if(!(sip->flags[Ship::Info_Flags::Gun_convergence]))
+			if (obj == Player_obj && sip->aims_at_flight_cursor_secondary)
+			{
+				vm_angles_2_matrix(&firing_orient, &Player_flight_cursor);
+				firing_orient = firing_orient * obj->orient;
+			} 
+			else if(!(sip->flags[Ship::Info_Flags::Gun_convergence]))
 			{
 				firing_orient = obj->orient;
 			}
@@ -14419,6 +14502,14 @@ int ship_fire_secondary( object *obj, int allow_swarm, bool rollback_shot )
 						swp->secondary_bank_ammo[bank]--;
 
 					shipp->weapon_energy -= wip->energy_consumed;
+				}
+
+				if (wip->wi_flags[Weapon::Info_Flags::Apply_Recoil]) {
+					float recoil_force = (wip->mass * wip->max_speed * wip->recoil_modifier * sip->ship_recoil_modifier);
+
+					vec3d impulse = firing_orient.vec.fvec * -recoil_force;
+
+					ship_apply_whack(&impulse, &firing_pos, obj);
 				}
 			}
 		}
@@ -19923,9 +20014,21 @@ bool ship_has_dock_bay(int shipnum)
 {
 	Assert(shipnum >= 0 && shipnum < MAX_SHIPS);
 
-	polymodel *pm;
-				
-	pm = model_get( Ship_info[Ships[shipnum].ship_info_index].model_num );
+	auto sip = &Ship_info[Ships[shipnum].ship_info_index];
+
+	// the model might not be loaded yet, so load it explicitly here
+	if (sip->model_num < 0)
+	{
+		if (VALID_FNAME(sip->pof_file))
+			sip->model_num = model_load(sip->pof_file, sip);
+	}
+	if (sip->model_num < 0)
+	{
+		Warning(LOCATION, "%s does not have a valid model number!", sip->name);
+		return false;
+	}
+
+	auto pm = model_get(sip->model_num);
 	Assert( pm );
 
 	return ( pm->ship_bay && (pm->ship_bay->num_paths > 0) );

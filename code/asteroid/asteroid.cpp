@@ -32,6 +32,7 @@
 #include "object/objcollide.h"
 #include "object/object.h"
 #include "parse/parselo.h"
+#include "particle/ParticleEffect.h"
 #include "scripting/global_hooks.h"
 #include "particle/hosts/EffectHostVector.h"
 #include "render/3d.h"
@@ -823,18 +824,7 @@ void asteroid_create_debris_field(int num_asteroids, int asteroid_speed, SCP_vec
  */
 void asteroid_level_init()
 {
-	Asteroid_field.num_initial_asteroids = 0;  // disable asteroid field by default.
-	Asteroid_field.speed = 0.0f;
-	vm_vec_make(&Asteroid_field.min_bound, -1000.0f, -1000.0f, -1000.0f);
-	vm_vec_make(&Asteroid_field.max_bound, 1000.0f, 1000.0f, 1000.0f);
-	vm_vec_make(&Asteroid_field.inner_min_bound, -500.0f, -500.0f, -500.0f);
-	vm_vec_make(&Asteroid_field.inner_max_bound, 500.0f, 500.0f, 500.0f);
-	Asteroid_field.has_inner_bound = false;
-	Asteroid_field.field_type = FT_ACTIVE;
-	Asteroid_field.debris_genre = DG_ASTEROID;
-	Asteroid_field.field_debris_type.clear();
-	Asteroid_field.field_asteroid_type.clear();
-	Asteroid_field.target_names.clear();
+	Asteroid_field = {};
 
 	if (!Fred_running)
 	{
@@ -1704,37 +1694,57 @@ static void asteroid_do_area_effect(object *asteroid_objp)
  */
 void asteroid_hit( object * pasteroid_obj, object * other_obj, vec3d * hitpos, float damage, vec3d* force )
 {
-	float		explosion_life;
-	asteroid	*asp;
-
-	asp = &Asteroids[pasteroid_obj->instance];
-
+	asteroid	*asp = &Asteroids[pasteroid_obj->instance];
+	asteroid_info *asip = &Asteroid_info[Asteroids[pasteroid_obj->instance].asteroid_type];
+	
 	if (pasteroid_obj->flags[Object::Object_Flags::Should_be_dead]){
 		return;
 	}
-
+	
 	if ( MULTIPLAYER_MASTER ){
 		send_asteroid_hit( pasteroid_obj, other_obj, hitpos, damage, force );
 	}
-
+	
 	if (hitpos && force && The_mission.ai_profile->flags[AI::Profile_Flags::Whackable_asteroids]) {
 		vec3d rel_hit_pos = *hitpos - pasteroid_obj->pos;
 		physics_calculate_and_apply_whack(force, &rel_hit_pos, &pasteroid_obj->phys_info, &pasteroid_obj->orient, &pasteroid_obj->phys_info.I_body_inv);
 		pasteroid_obj->phys_info.desired_vel = pasteroid_obj->phys_info.vel;
 	}
-
+	
 	pasteroid_obj->hull_strength -= damage;
-
+	
 	if (pasteroid_obj->hull_strength < 0.0f) {
 		if ( !asp->final_death_time.isValid() ) {
 			int play_loud_collision = 0;
+			
+			float explosion_life = 1.f;
+			int breakup_timestamp;
+			
+			Assertion(!asip->end_particles.isValid() || asip->breakup_delay.has_value(), "Asteroid %s has end particles but no breakup delay. Parsing should not have allowed this!", asip->name);
 
-			explosion_life = asteroid_create_explosion(pasteroid_obj);
+			if (asip->end_particles.isValid()) {
+				auto source = particle::ParticleManager::get()->createSource(asip->end_particles);
+
+				// Use the position since the asteroid is going to be invalid soon
+				auto host = std::make_unique<EffectHostVector>(pasteroid_obj->pos, pasteroid_obj->orient, pasteroid_obj->phys_info.vel);
+				host->setRadius(pasteroid_obj->radius);
+				source->setHost(std::move(host));
+				source->setNormal(pasteroid_obj->orient.vec.uvec);
+				source->finishCreation();
+			} else {
+				explosion_life = asteroid_create_explosion(pasteroid_obj);
+			}
+
+			if (asip->breakup_delay.has_value()) {
+				breakup_timestamp = fl2i(*asip->breakup_delay * MILLISECONDS_PER_SECOND);
+			} else {
+				breakup_timestamp = fl2i((explosion_life * MILLISECONDS_PER_SECOND) / 5.f);
+			}
 
 			asteroid_explode_sound(pasteroid_obj, asp->asteroid_type, play_loud_collision);
 			asteroid_do_area_effect(pasteroid_obj);
 
-			asp->final_death_time = _timestamp( fl2i(explosion_life*MILLISECONDS_PER_SECOND)/5 );	// Wait till 30% of vclip time before breaking the asteroid up.
+			asp->final_death_time = _timestamp( breakup_timestamp );	// Wait till 20% of vclip time before breaking the asteroid up, or use the specified delay
 			if ( hitpos ) {
 				asp->death_hit_pos = *hitpos;
 			} else {
@@ -2314,7 +2324,7 @@ static void asteroid_parse_section()
 	}
 
 	if (optional_string("$Detail distance:")) {
-		asteroid_p->num_detail_levels = (int)stuff_int_list(asteroid_p->detail_distance, MAX_ASTEROID_DETAIL_LEVELS, RAW_INTEGER_TYPE);
+		asteroid_p->num_detail_levels = sz2i(stuff_int_list(asteroid_p->detail_distance, MAX_ASTEROID_DETAIL_LEVELS, ParseLookupType::RAW_INTEGER_TYPE));
 	}
 
 	if (optional_string("$Max Speed:")) {
@@ -2331,13 +2341,25 @@ static void asteroid_parse_section()
 		asteroid_p->damage_type_idx_sav = damage_type_add(buf);
 		asteroid_p->damage_type_idx = asteroid_p->damage_type_idx_sav;
 	}
-	
-	if(optional_string("$Explosion Animations:")){
-		stuff_fireball_index_list(asteroid_p->explosion_bitmap_anims, asteroid_p->name);
+
+	if (optional_string("$Explosion Effect:")) {
+		asteroid_p->end_particles = particle::util::parseEffect(asteroid_p->name);
+	} else {
+		if(optional_string("$Explosion Animations:")){
+			stuff_fireball_index_list(asteroid_p->explosion_bitmap_anims, asteroid_p->name);
+		}
+		
+		if (optional_string("$Explosion Radius Mult:")) {
+				stuff_float(&asteroid_p->fireball_radius_multiplier);
+		}
 	}
 
-	if (optional_string("$Explosion Radius Mult:")) {
-		stuff_float(&asteroid_p->fireball_radius_multiplier);
+	if (optional_string("$Breakup Delay:")) {
+		stuff_float(&asteroid_p->breakup_delay.emplace());
+	}
+
+	if (asteroid_p->end_particles.isValid() && !asteroid_p->breakup_delay.has_value()) {
+		error_display(0, "Asteroid %s has an explosion effect but no breakup delay!", asteroid_p->name);
 	}
 
 	if (optional_string("$Expl inner rad:")){
@@ -2466,8 +2488,8 @@ static void asteroid_parse_tbl(const char* filename)
 			Asteroid_impact_explosion_ani = particle::util::parseEffect();
 		}
 		else {
-			char impact_ani_file[MAX_FILENAME_LEN];
-			float Asteroid_impact_explosion_radius;
+			char impact_ani_file[MAX_FILENAME_LEN] = {0};
+			float Asteroid_impact_explosion_radius = 0.0f;
 			int num_frames;
 
 			if (optional_string("$Impact Explosion:")) {

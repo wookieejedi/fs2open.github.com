@@ -6,15 +6,16 @@
 #include "gamesnd/eventmusic.h"
 #include "mission/missionparse.h"
 #include "mission/missionmessage.h"
+#include "playerman/managepilot.h" // for squad logos
+#include "sound/sound.h"
 
-namespace fso {
-namespace fred {
-namespace dialogs {
+namespace fso::fred::dialogs {
 
 
 class MissionSpecDialogModel : public AbstractDialogModel {
 private:
 	void initializeData();
+	void prepareSquadLogoList();
 
 
 	SCP_string _m_created;
@@ -35,13 +36,23 @@ private:
 	bool		_m_full_war;
 	uint		_m_num_respawns;
 	int			_m_max_respawn_delay;
+	float       _m_player_entry_delay;
 	bool		_m_disallow_support;
 	float		_m_max_hull_repair_val;
 	float		_m_max_subsys_repair_val;
 	bool		_m_contrail_threshold_flag;
 	int			_m_contrail_threshold;
+	SCP_map<SCP_string, SCP_string> _m_custom_data;
+	SCP_vector<custom_string> _m_custom_strings;
+	sound_env	_m_sound_env;
+
+	std::array<SCP_string, MAX_STARTING_WINGS> _m_custom_starting_wings;
+	std::array<SCP_string, MAX_SQUADRON_WINGS> _m_custom_squadron_wings;
+	std::array<SCP_string, MAX_TVT_WINGS> _m_custom_tvt_wings;
 
 	flagset<Mission::Mission_Flags> _m_flags;
+	SCP_vector<std::pair<SCP_string, bool>> _m_flag_data;
+	SCP_vector<SCP_string> _m_squadLogoList;
 
 	int _m_type;
 
@@ -70,10 +81,14 @@ public:
 	void setMaxRespawnDelay(int);
 	int getMaxRespawnDelay();
 
+	void setPlayerEntryDelay(float);
+	float getPlayerEntryDelay() const;
+
 	void setSquadronName(const SCP_string&);
 	SCP_string getSquadronName();
 	void setSquadronLogo(const SCP_string&);
 	SCP_string getSquadronLogo();
+	std::vector<std::string> getSquadLogoList() const { return _m_squadLogoList; };
 
 	void setLowResLoadingScreen(const SCP_string&);
 	SCP_string getLowResLoadingScren();
@@ -102,8 +117,10 @@ public:
 	void setSubEventMusic(const SCP_string&);
 	SCP_string getSubEventMusic();
 
-	void setMissionFlag(Mission::Mission_Flags flag, bool enabled);
-	const flagset<Mission::Mission_Flags>& getMissionFlags() const;
+	void setMissionFlag(const SCP_string& flag_name, bool enabled);
+	void setMissionFlagDirect(Mission::Mission_Flags flag, bool enabled);
+	bool getMissionFlag(Mission::Mission_Flags flag) const;
+	const SCP_vector<std::pair<SCP_string, bool>>& getMissionFlagsList();
 
 	void setMissionFullWar(bool enabled);
 
@@ -116,8 +133,24 @@ public:
 	void setDesignerNoteText(const SCP_string&);
 	SCP_string getDesignerNoteText();
 
+	void setCustomData(const SCP_map<SCP_string, SCP_string>& custom_data);
+	SCP_map<SCP_string, SCP_string> getCustomData() const;
+
+	void setCustomStrings(const SCP_vector<custom_string>& custom_strings);
+	SCP_vector<custom_string> getCustomStrings() const;
+
+	void setSoundEnvironmentParams(const sound_env& env);
+	sound_env getSoundEnvironmentParams() const;
+
+	void setCustomStartingWings(const std::array<SCP_string, MAX_STARTING_WINGS>& starting_wings);
+	std::array<SCP_string, MAX_STARTING_WINGS> getCustomStartingWings() const;
+
+	void setCustomSquadronWings(const std::array<SCP_string, MAX_SQUADRON_WINGS>& squadron_wings);
+	std::array<SCP_string, MAX_SQUADRON_WINGS> getCustomSquadronWings() const;
+
+	void setCustomTvTWings(const std::array<SCP_string, MAX_TVT_WINGS>& tvt_wings);
+	std::array<SCP_string, MAX_TVT_WINGS> getCustomTvTWings() const;
+
 };
 
-}
-}
-}
+} // namespace fso::fred::dialogs

@@ -3,6 +3,7 @@
 #include "../AbstractDialogModel.h"
 
 #include <object/objectdock.h>
+#include <mission/management.h>
 
 namespace fso {
 namespace fred {
@@ -20,10 +21,9 @@ class ShipInitialStatusDialogModel : public AbstractDialogModel {
 
   private:
 
-
+	  int guardian_threshold;
 	int m_ship;
 	int cur_subsys = -1;
-
 	int m_damage;
 	int m_shields;
 	int m_force_shields;
@@ -122,6 +122,9 @@ class ShipInitialStatusDialogModel : public AbstractDialogModel {
 
 	bool getUseTeamcolours() const;
 	bool getIfMultpleShips() const;
+
+	int getGuardian() const;
+	void setGuardian(int);
 };
 
 /**
@@ -135,9 +138,9 @@ class ShipInitialStatusDialogModel : public AbstractDialogModel {
 template <typename T>
 static void handle_inconsistent_flag(flagset<T>& flags, T flag, int value)
 {
-	if (value == Qt::Checked) {
+	if (value == CheckState::Checked) {
 		flags.set(flag);
-	} else if (value == Qt::Unchecked) {
+	} else if (value == CheckState::Unchecked) {
 		flags.remove(flag);
 	}
 }

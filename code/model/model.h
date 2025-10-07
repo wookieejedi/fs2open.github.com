@@ -23,7 +23,7 @@
 #include "model/model_flags.h"
 #include "object/object.h"
 #include "ship/ship_flags.h"
-#include "particle/ParticleEffect.h"
+#include "particle/particle.h"
 
 class object;
 class ship_info;
@@ -294,6 +294,7 @@ public:
 
 	float density;
 
+	particle::ParticleEffectHandle death_effect;
 	particle::ParticleEffectHandle debris_flame_particles;
 	particle::ParticleEffectHandle shrapnel_flame_particles;
 

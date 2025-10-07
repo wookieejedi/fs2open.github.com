@@ -125,7 +125,8 @@ const size_t Num_burst_fire_flags = sizeof(Burst_fire_flags)/sizeof(flag_def_lis
 
 flag_def_list_new<Weapon::Beam_Info_Flags> Beam_info_flags[] = {
 	{ "burst shares random target",		Weapon::Beam_Info_Flags::Burst_share_random,		        true, false },
-	{ "track own texture tiling",       Weapon::Beam_Info_Flags::Track_own_texture_tiling,          true, false }
+	{ "track own texture tiling",       Weapon::Beam_Info_Flags::Track_own_texture_tiling,          true, false },
+	{ "direct fire lead target",        Weapon::Beam_Info_Flags::Direct_fire_lead_target,           true, false }
 };
 
 const size_t Num_beam_info_flags = sizeof(Beam_info_flags) / sizeof(flag_def_list_new<Weapon::Beam_Info_Flags>);
@@ -775,7 +776,7 @@ static particle::ParticleEffectHandle convertLegacyPspewBuffer(const pspew_legac
 			IS_VEC_NULL(&pspew_buffer.particle_spew_offset) ? std::nullopt : std::optional(pspew_buffer.particle_spew_offset), //Local offset
 			::util::UniformFloatRange(pspew_buffer.particle_spew_lifetime), //Lifetime
 			::util::UniformFloatRange(pspew_buffer.particle_spew_radius), //Radius
-			hasAnim ? bm_load_animation(pspew_buffer.particle_spew_anim.c_str()) : particle::Anim_bitmap_id_smoke)); //Bitmap
+			hasAnim ? bm_load_either(pspew_buffer.particle_spew_anim.c_str()) : particle::Anim_bitmap_id_smoke)); //Bitmap or Anim
 }
 
 /**
@@ -1074,7 +1075,7 @@ int parse_weapon(int subtype, bool replace, const char *filename)
 		stuff_int(&wip->hud_target_lod);
 
 	if(optional_string("$Detail distance:")) {
-		wip->num_detail_levels = (int)stuff_int_list(wip->detail_distance, MAX_MODEL_DETAIL_LEVELS, RAW_INTEGER_TYPE);
+		wip->num_detail_levels = sz2i(stuff_int_list(wip->detail_distance, MAX_MODEL_DETAIL_LEVELS, ParseLookupType::RAW_INTEGER_TYPE));
 	}
 
 	if ( optional_string("$External Model File:") )

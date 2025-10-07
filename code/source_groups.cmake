@@ -836,6 +836,12 @@ add_file_folder("Mission"
 	mission/mission_flags.h
 )
 
+# MissionEditor file
+add_file_folder("MissionEditor"
+	missioneditor/common.cpp
+	missioneditor/common.h
+)
+
 # MissionUI files
 add_file_folder("MissionUI"
 	missionui/chatbox.cpp
@@ -1028,6 +1034,7 @@ add_file_folder("Object"
 	object/waypoint.cpp
 	object/waypoint.h
 	object/object_flags.h
+	object/object_instance.h
 )
 
 # Observer files

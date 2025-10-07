@@ -1225,6 +1225,9 @@ public:
 
 	particle::ParticleEffectHandle		impact_spew;
 	particle::ParticleEffectHandle		damage_spew;
+	particle::ParticleEffectHandle		death_roll_exp_particles;
+	particle::ParticleEffectHandle		pre_death_exp_particles;
+	particle::ParticleEffectHandle		propagating_exp_particles;
 	particle::ParticleEffectHandle		split_particles;
 	particle::ParticleEffectHandle		knossos_end_particles;
 	particle::ParticleEffectHandle		regular_end_particles;
@@ -1262,6 +1265,7 @@ public:
 	// subsystem information
 	int		n_subsystems;						// this number comes from ships.tbl
     model_subsystem *subsystems;				// see model.h for structure definition
+	particle::ParticleEffectHandle default_subsys_death_effect;
 
 	// Energy Transfer System fields
 	float		power_output;					// power output of ships reactor (EU/s)
@@ -1446,6 +1450,7 @@ public:
 	float bank_autoaim_fov[MAX_SHIP_PRIMARY_BANKS];
 
 	bool aims_at_flight_cursor;
+	bool aims_at_flight_cursor_secondary;
 	float flight_cursor_aim_extent;
 
 	bool topdown_offset_def;

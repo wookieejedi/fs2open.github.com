@@ -1,8 +1,8 @@
 #include <math/bitarray.h>
 #include "freespace.h"
 #include "particle/ParticleSource.h"
+#include "particle/ParticleEffect.h"
 #include "weapon/weapon.h"
-#include "ship/ship.h"
 
 namespace particle {
 
@@ -85,6 +85,7 @@ bool ParticleSource::process() {
 }
 
 void ParticleSource::setNormal(const vec3d& normal) {
+	Assertion(vm_vec_is_normalized(&normal), "Particle source normal must be normalized!");
 	m_normal = normal;
 }
 

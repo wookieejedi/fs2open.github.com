@@ -217,7 +217,8 @@ namespace Ship {
 		Instantaneous_acceleration,		// Goober5000
 		Has_display_name,				// Goober5000
 		Large_ship_deathroll,			// Asteroth - big ships dont normally deathroll, this makes them do it!
-		No_impact_debris,				// wookieejedi - Don't spawn the small debris on impact
+		Disable_all_generic_impact_debris,    // wookieejedi - Don't spawn debris on impact
+		Disable_all_generic_explosion_debris, // wookieejedi - Don't spawn debris on explosion
 
 		NUM_VALUES
 	};
@@ -268,8 +269,7 @@ namespace Ship {
     // Not all wing flags are parseable or saveable in mission files. Right now, the only ones which can be set by mission designers are:
     // ignore_count, reinforcement, no_arrival_music, no_arrival_message, no_first_wave_message, no_arrival_warp, no_departure_warp,
 	// same_arrival_warp_when_docked, same_departure_warp_when_docked, no_dynamic, and nav_carry_status
-    // Should that change, bump this variable and make sure to make the necessary changes to parse_wing (in missionparse)
-#define PARSEABLE_WING_FLAGS 11
+    // The list of parseable flags is in missionparse.cpp
 	
     FLAG_LIST(Wing_Flags) {
 		Gone,					// all ships were either destroyed or departed

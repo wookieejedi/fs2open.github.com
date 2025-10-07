@@ -190,16 +190,19 @@ static bool override_fog = false;
 graphics::deferred_light_data*
 
 // common conversion operations to translate a game light data structure into a render-ready light uniform.
-prepare_light_uniforms(light& l, graphics::util::UniformAligner& uniformAligner)
+prepare_light_uniforms(light& l, graphics::util::UniformAligner& uniformAligner, const ltp::profile* lp)
 {
 	graphics::deferred_light_data* light_data = uniformAligner.addTypedElement<graphics::deferred_light_data>();
 
 	light_data->lightType = static_cast<int>(l.type);
 
+	float intensity =
+		(Lighting_mode == lighting_mode::COCKPIT) ? lp->cockpit_light_intensity_modifier.handle(l.intensity) : l.intensity;
+
 	vec3d diffuse;
-	diffuse.xyz.x = l.r * l.intensity;
-	diffuse.xyz.y = l.g * l.intensity;
-	diffuse.xyz.z = l.b * l.intensity;
+	diffuse.xyz.x = l.r * intensity;
+	diffuse.xyz.y = l.g * intensity;
+	diffuse.xyz.z = l.b * intensity;
 
 	light_data->diffuseLightColor = diffuse;
 
@@ -342,7 +345,7 @@ void gr_opengl_deferred_lighting_finish()
 		bool first_directional = true;
 
 		for (auto& l : full_frame_lights) {
-			auto light_data = prepare_light_uniforms(l, light_uniform_aligner);
+			auto light_data = prepare_light_uniforms(l, light_uniform_aligner, lp);
 
 			if (l.type == Light_Type::Directional ) {
 				if (Shadow_quality != ShadowQuality::Disabled) {
@@ -372,7 +375,7 @@ void gr_opengl_deferred_lighting_finish()
 			}
 		}
 		for (auto& l : sphere_lights) {
-			auto light_data = prepare_light_uniforms(l, light_uniform_aligner);
+			auto light_data = prepare_light_uniforms(l, light_uniform_aligner, lp);
 
 			if (l.type == Light_Type::Cone) {
 				light_data->dualCone = (l.flags & LF_DUAL_CONE) ? 1.0f : 0.0f;
@@ -384,6 +387,7 @@ void gr_opengl_deferred_lighting_finish()
 							? lp->cockpit_light_radius_modifier.handle(MAX(l.rada, l.radb))
 							: MAX(l.rada, l.radb);
 			light_data->lightRadius = rad;
+
 			// A small padding factor is added to guard against potentially clipping the edges of the light with facets
 			// of the volume mesh.
 			light_data->scale.xyz.x = rad * 1.05f;
@@ -391,11 +395,12 @@ void gr_opengl_deferred_lighting_finish()
 			light_data->scale.xyz.z = rad * 1.05f;
 		}
 		for (auto& l : cylinder_lights) {
-			auto light_data = prepare_light_uniforms(l, light_uniform_aligner);
+			auto light_data = prepare_light_uniforms(l, light_uniform_aligner, lp);
 			float rad =
 				(Lighting_mode == lighting_mode::COCKPIT) ? lp->cockpit_light_radius_modifier.handle(l.radb) : l.radb;
 
 			light_data->lightRadius = rad;
+
 			light_data->lightType = LT_TUBE;
 
 			vec3d a;
@@ -524,7 +529,10 @@ void gr_opengl_deferred_lighting_finish()
 	// Now reset back to drawing into the color buffer
 	glDrawBuffer(GL_COLOR_ATTACHMENT0);
 
-	if (The_mission.flags[Mission::Mission_Flags::Fullneb] && Neb2_render_mode != NEB2_RENDER_NONE && !override_fog) {
+	bool bDrawFullNeb = The_mission.flags[Mission::Mission_Flags::Fullneb] && Neb2_render_mode != NEB2_RENDER_NONE && !override_fog;
+	bool bDrawNebVolumetrics = The_mission.volumetrics && The_mission.volumetrics->get_enabled() && !override_fog;
+
+	if (bDrawFullNeb) {
 		GL_state.SetAlphaBlendMode(ALPHA_BLEND_NONE);
 		gr_zbuffer_set(GR_ZBUFF_NONE);
 		opengl_shader_set_current(gr_opengl_maybe_create_shader(SDR_TYPE_SCENE_FOG, 0));
@@ -551,8 +559,26 @@ void gr_opengl_deferred_lighting_finish()
 		});
 
 		opengl_draw_full_screen_textured(0.0f, 0.0f, 1.0f, 1.0f);
-	}
-	else if (The_mission.volumetrics && The_mission.volumetrics->get_enabled() && !override_fog) {
+
+		if (bDrawNebVolumetrics) {
+			glReadBuffer(GL_COLOR_ATTACHMENT0);
+			glDrawBuffer(GL_COLOR_ATTACHMENT5);
+			glBlitFramebuffer(0,
+				0,
+				gr_screen.max_w,
+				gr_screen.max_h,
+				0,
+				0,
+				gr_screen.max_w,
+				gr_screen.max_h,
+				GL_COLOR_BUFFER_BIT,
+				GL_NEAREST);
+			glDrawBuffer(GL_COLOR_ATTACHMENT0);
+			glReadBuffer(GL_COLOR_ATTACHMENT0);
+		}
+		
+	} 
+	if (bDrawNebVolumetrics) {
 		GR_DEBUG_SCOPE("Volumetric Nebulae");
 		TRACE_SCOPE(tracing::Volumetrics);
 
@@ -632,7 +658,8 @@ void gr_opengl_deferred_lighting_finish()
 		gr_end_view_matrix();
 		gr_end_proj_matrix();
 	}
-	else {
+
+	if(!bDrawFullNeb && !bDrawNebVolumetrics) {
 		// Transfer the resolved lighting back to the color texture
 		// TODO: Maybe this could be improved so that it doesn't require the copy back operation?
 		glReadBuffer(GL_COLOR_ATTACHMENT5);

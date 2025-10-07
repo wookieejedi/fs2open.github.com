@@ -142,6 +142,7 @@ namespace AI {
 		Fightercraft_nonshielded_ships_can_manage_ets,
 		Ships_playing_dead_dont_manage_ets,
 		Better_combat_collision_avoidance,
+		Better_combat_collision_avoid_includes_target,
 		Better_guard_collision_avoidance,
 		Require_exact_los,
 		Improved_missile_avoidance,
@@ -179,6 +180,7 @@ namespace AI {
 		Freespace_1_missile_behavior,
 		ETS_uses_power_output,
 		ETS_energy_same_regardless_of_system_presence,
+		Dont_form_on_wing_at_mission_start,
 
 		NUM_VALUES
 	};

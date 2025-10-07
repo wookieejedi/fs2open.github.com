@@ -3,13 +3,12 @@
 #include "mission/object.h"
 
 #include <globalincs/linklist.h>
+#include <localization/localize.h>
 
 #include <QtWidgets>
 #include <object/objectdock.cpp>
 
-namespace fso {
-namespace fred {
-namespace dialogs {
+namespace fso::fred::dialogs {
 void reset_arrival_to_false(int shipnum, bool reset_wing, EditorViewport* _viewport)
 {
 	char buf[256];
@@ -140,7 +139,7 @@ void ShipInitialStatusDialogModel::initializeData(bool multi)
 	m_velocity = static_cast<int>(Objects[_editor->currentObject].phys_info.speed);
 	m_shields = static_cast<int>(Objects[_editor->currentObject].shield_quadrant[0]);
 	m_hull = static_cast<int>(Objects[_editor->currentObject].hull_strength);
-
+	guardian_threshold = Ships[m_ship].ship_guardian_threshold;
 	if (Objects[_editor->currentObject].flags[Object::Object_Flags::No_shields])
 		m_has_shields = 0;
 	else
@@ -342,8 +341,7 @@ void ShipInitialStatusDialogModel::undock(object* objp1, object* objp2)
 			vm_vec_scale_add2(&objp2->pos,
 				&v,
 				ship_class_get_length(&Ship_info[Ships[objp2->instance].ship_info_index]));
-		}
-		else {
+		} else {
 			vm_vec_scale_add2(&objp1->pos,
 				&v,
 				ship_class_get_length(&Ship_info[Ships[objp1->instance].ship_info_index]) * -1.0f);
@@ -462,7 +460,9 @@ void ShipInitialStatusDialogModel::dock_evaluate_all_docked_objects(object* objp
 	}
 }
 
-void ShipInitialStatusDialogModel::dock_evaluate_all_docked_objects(object* objp, dock_function_info* infop, void(*function)(object*))
+void ShipInitialStatusDialogModel::dock_evaluate_all_docked_objects(object* objp,
+	dock_function_info* infop,
+	void (*function)(object*))
 {
 	Assertion((objp != nullptr) && (infop != nullptr) && (function != nullptr),
 		"dock_evaluate_all_docked_objects, invalid argument(s)");
@@ -549,7 +549,10 @@ void ShipInitialStatusDialogModel::dock_evaluate_tree(object* objp,
 	}
 }
 
-void ShipInitialStatusDialogModel::dock_evaluate_tree(object* objp, dock_function_info* infop, void(*function)(object*), ubyte* visited_bitstring)
+void ShipInitialStatusDialogModel::dock_evaluate_tree(object* objp,
+	dock_function_info* infop,
+	void (*function)(object*),
+	ubyte* visited_bitstring)
 {
 	// make sure we haven't visited this object already
 	if (get_bit(visited_bitstring, OBJ_INDEX(objp)))
@@ -594,7 +597,7 @@ bool ShipInitialStatusDialogModel::apply()
 					objp->flags.set(Object::Object_Flags::No_shields);
 				}
 				auto shipp = &Ships[get_ship_from_obj(objp)];
-
+				shipp->ship_guardian_threshold = guardian_threshold;
 				// We need to ensure that we handle the inconsistent "boolean" value correctly
 				handle_inconsistent_flag(shipp->flags, Ship::Ship_Flags::Force_shields_on, m_force_shields);
 				handle_inconsistent_flag(shipp->flags, Ship::Ship_Flags::Ship_locked, m_ship_locked);
@@ -614,7 +617,7 @@ bool ShipInitialStatusDialogModel::apply()
 		modify(Objects[_editor->currentObject].hull_strength, (float)m_hull);
 
 		Objects[_editor->currentObject].flags.set(Object::Object_Flags::No_shields, m_has_shields == 0);
-
+		Ships[m_ship].ship_guardian_threshold = guardian_threshold;
 		// We need to ensure that we handle the inconsistent "boolean" value correctly. Not strictly needed here but
 		// just to be safe...
 		handle_inconsistent_flag(Ships[m_ship].flags, Ship::Ship_Flags::Force_shields_on, m_force_shields);
@@ -633,13 +636,12 @@ bool ShipInitialStatusDialogModel::apply()
 
 void ShipInitialStatusDialogModel::reject() {}
 
-
 void ShipInitialStatusDialogModel::setVelocity(const int value)
 {
 	modify(m_velocity, value);
 }
 
- int ShipInitialStatusDialogModel::getVelocity() const
+int ShipInitialStatusDialogModel::getVelocity() const
 {
 	return m_velocity;
 }
@@ -649,7 +651,7 @@ void ShipInitialStatusDialogModel::setHull(const int value)
 	modify(m_hull, value);
 }
 
- int ShipInitialStatusDialogModel::getHull() const
+int ShipInitialStatusDialogModel::getHull() const
 {
 	return m_hull;
 }
@@ -669,7 +671,7 @@ void ShipInitialStatusDialogModel::setShieldHull(const int value)
 	modify(m_shields, value);
 }
 
- int ShipInitialStatusDialogModel::getShieldHull() const
+int ShipInitialStatusDialogModel::getShieldHull() const
 {
 	return m_shields;
 }
@@ -679,7 +681,7 @@ void ShipInitialStatusDialogModel::setForceShield(const int state)
 	modify(m_force_shields, state);
 }
 
- int ShipInitialStatusDialogModel::getForceShield() const
+int ShipInitialStatusDialogModel::getForceShield() const
 {
 	return m_force_shields;
 }
@@ -689,7 +691,7 @@ void ShipInitialStatusDialogModel::setShipLocked(const int state)
 	modify(m_ship_locked, state);
 }
 
- int ShipInitialStatusDialogModel::getShipLocked() const
+int ShipInitialStatusDialogModel::getShipLocked() const
 {
 	return m_ship_locked;
 }
@@ -699,7 +701,7 @@ void ShipInitialStatusDialogModel::setWeaponLocked(const int state)
 	modify(m_weapons_locked, state);
 }
 
- int ShipInitialStatusDialogModel::getWeaponLocked() const
+int ShipInitialStatusDialogModel::getWeaponLocked() const
 {
 	return m_weapons_locked;
 }
@@ -709,7 +711,7 @@ void ShipInitialStatusDialogModel::setPrimariesDisabled(const int state)
 	modify(m_primaries_locked, state);
 }
 
- int ShipInitialStatusDialogModel::getPrimariesDisabled() const
+int ShipInitialStatusDialogModel::getPrimariesDisabled() const
 {
 	return m_primaries_locked;
 }
@@ -719,7 +721,7 @@ void ShipInitialStatusDialogModel::setSecondariesDisabled(const int state)
 	modify(m_secondaries_locked, state);
 }
 
- int ShipInitialStatusDialogModel::getSecondariesDisabled() const
+int ShipInitialStatusDialogModel::getSecondariesDisabled() const
 {
 	return m_secondaries_locked;
 }
@@ -729,7 +731,7 @@ void ShipInitialStatusDialogModel::setTurretsDisabled(const int state)
 	modify(m_turrets_locked, state);
 }
 
- int ShipInitialStatusDialogModel::getTurretsDisabled() const
+int ShipInitialStatusDialogModel::getTurretsDisabled() const
 {
 	return m_turrets_locked;
 }
@@ -739,7 +741,7 @@ void ShipInitialStatusDialogModel::setAfterburnerDisabled(const int state)
 	modify(m_afterburner_locked, state);
 }
 
- int ShipInitialStatusDialogModel::getAfterburnerDisabled() const
+int ShipInitialStatusDialogModel::getAfterburnerDisabled() const
 {
 	return m_afterburner_locked;
 }
@@ -749,7 +751,7 @@ void ShipInitialStatusDialogModel::setDamage(const int value)
 	modify(m_damage, value);
 }
 
- int ShipInitialStatusDialogModel::getDamage() const
+int ShipInitialStatusDialogModel::getDamage() const
 {
 	return m_damage;
 }
@@ -795,6 +797,7 @@ void ShipInitialStatusDialogModel::change_subsys(const int new_subsys)
 
 		// update cargo name
 		if (!m_cargo_name.empty()) { //-V805
+			lcl_fred_replace_stuff(m_cargo_name);
 			cargo_index = string_lookup(m_cargo_name.c_str(), Cargo_names, Num_cargo);
 			if (cargo_index == -1) {
 				if (Num_cargo < MAX_CARGO) {
@@ -842,22 +845,22 @@ void ShipInitialStatusDialogModel::change_subsys(const int new_subsys)
 	modelChanged();
 }
 
- int ShipInitialStatusDialogModel::getShip() const
+int ShipInitialStatusDialogModel::getShip() const
 {
 	return m_ship;
 }
 
- int ShipInitialStatusDialogModel::getnum_dock_points() const
+int ShipInitialStatusDialogModel::getnum_dock_points() const
 {
 	return num_dock_points;
 }
 
- int ShipInitialStatusDialogModel::getShip_has_scannable_subsystems() const
+int ShipInitialStatusDialogModel::getShip_has_scannable_subsystems() const
 {
 	return ship_has_scannable_subsystems;
 }
 
- dockpoint_information* ShipInitialStatusDialogModel::getdockpoint_array() const
+dockpoint_information* ShipInitialStatusDialogModel::getdockpoint_array() const
 {
 	return dockpoint_array;
 }
@@ -883,6 +886,14 @@ bool ShipInitialStatusDialogModel::getIfMultpleShips() const
 	return m_multi_edit;
 }
 
-} // namespace dialogs
-} // namespace fred
-} // namespace fso
+int ShipInitialStatusDialogModel::getGuardian() const
+{
+	return guardian_threshold;
+}
+
+void ShipInitialStatusDialogModel::setGuardian(int value)
+{
+	modify(guardian_threshold, value);
+}
+
+} // namespace fso::fred::dialogs

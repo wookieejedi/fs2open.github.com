@@ -157,7 +157,34 @@ void do_subobj_destroyed_stuff( ship *ship_p, ship_subsys *subsys, const vec3d* 
 
 	// create fireballs when subsys destroy for large ships.
 	if (!(subsys->flags[Ship::Subsystem_Flags::Vanished, Ship::Subsystem_Flags::No_disappear]) && !no_explosion) {
-		if (ship_objp->radius > 100.0f) {
+		vec3d center_to_subsys;
+		vm_vec_sub(&center_to_subsys, &g_subobj_pos, &ship_objp->pos);
+
+		particle::ParticleEffectHandle death_effect;
+
+		if (psub->death_effect.isValid()) {
+			death_effect = psub->death_effect;
+		} else {
+			death_effect = sip->default_subsys_death_effect;
+		}
+
+		if (death_effect.isValid()) {
+			vec3d subsys_local_pos;
+			if (psub->subobj_num >= 0) {
+				// the vmd_zero_vector here should probably be psub->pnt instead, but this matches the behavior of get_subsystem_world_pos
+				model_instance_local_to_global_point(&subsys_local_pos, &vmd_zero_vector, ship_p->model_instance_num, psub->subobj_num);
+			} else {
+				subsys_local_pos = psub->pnt;
+			}
+			vec3d normalized_center_to_subsys = center_to_subsys;
+			vm_vec_normalize(&normalized_center_to_subsys);
+			// spawn particle effect
+			auto source = particle::ParticleManager::get()->createSource(death_effect);
+			source->setHost(make_unique<EffectHostObject>(ship_objp, subsys_local_pos, vmd_identity_matrix));
+			source->setTriggerRadius(psub->radius);
+			source->setNormal(normalized_center_to_subsys);
+			source->finishCreation();
+		} else if (ship_objp->radius > 100.0f) {
 			// number of fireballs determined by radius of subsys
 			int num_fireballs;
 			if ( psub->radius < 3 ) {
@@ -166,8 +193,7 @@ void do_subobj_destroyed_stuff( ship *ship_p, ship_subsys *subsys, const vec3d* 
 				 num_fireballs = 5;
 			}
 
-			vec3d temp_vec, center_to_subsys, rand_vec;
-			vm_vec_sub(&center_to_subsys, &g_subobj_pos, &ship_objp->pos);
+			vec3d temp_vec, rand_vec;
 			for (i=0; i<num_fireballs; i++) {
 				if (i==0) {
 					// make first fireball at hitpos
@@ -308,9 +334,11 @@ void do_subobj_destroyed_stuff( ship *ship_p, ship_subsys *subsys, const vec3d* 
 			));
 	}
 
+	bool no_fireballs = psub->death_effect.isValid() || sip->default_subsys_death_effect.isValid();
+
 	if (!(subsys->flags[Ship::Subsystem_Flags::No_disappear])) {
 		if (psub->subobj_num > -1) {
-			shipfx_blow_off_subsystem(ship_objp, ship_p, subsys, &g_subobj_pos, no_explosion);
+			shipfx_blow_off_subsystem(ship_objp, ship_p, subsys, &g_subobj_pos, no_explosion, no_fireballs);
 			subsys->submodel_instance_1->blown_off = true;
 		}
 
@@ -769,8 +797,8 @@ std::pair<std::optional<ConditionData>, float> do_subobj_hit_stuff(object *ship_
 	if (!global_damage) {
 		auto subsys = ship_get_subsys_for_submodel(ship_p, submodel_num);
 
-		if ( !(Ship_info[ship_p->ship_info_index].flags[Ship::Info_Flags::No_impact_debris]) && 
-			( subsys == nullptr || !(subsys->system_info->flags[Model::Subsystem_Flags::No_impact_debris]) ) ) {
+		if ( !(Ship_info[ship_p->ship_info_index].flags[Ship::Info_Flags::Disable_all_generic_impact_debris]) && 
+			( subsys == nullptr || !(subsys->system_info->flags[Model::Subsystem_Flags::Disable_all_generic_impact_debris]) ) ) {
 			create_generic_debris(ship_objp, hitpos, 1.0f, 5.0f, 1.0f, false);
 		}
 	}
@@ -1827,19 +1855,21 @@ static void ship_vaporize(ship *shipp)
 	object *ship_objp;
 
 	// sanity
-	Assert(shipp != NULL);
-	if(shipp == NULL){
+	Assert(shipp != nullptr);
+	if (shipp == nullptr) {
 		return;
 	}
 	Assert((shipp->objnum >= 0) && (shipp->objnum < MAX_OBJECTS));
-	if((shipp->objnum < 0) || (shipp->objnum >= MAX_OBJECTS)){
+	if ( (shipp->objnum < 0) || (shipp->objnum >= MAX_OBJECTS) ) {
 		return;
 	}
 	ship_objp = &Objects[shipp->objnum];
 	ship_info* sip = &Ship_info[shipp->ship_info_index];
 
 	// create debris shards
-	create_generic_debris(ship_objp, &ship_objp->pos, (float)sip->generic_debris_spew_num, sip->generic_debris_spew_num * 2.0f, 1.4f, true);
+	if ( !(sip->flags[Ship::Info_Flags::Disable_all_generic_explosion_debris]) ) {
+		create_generic_debris(ship_objp, &ship_objp->pos, (float)sip->generic_debris_spew_num, sip->generic_debris_spew_num * 2.0f, 1.4f, true);
+	}
 }
 
 //	*ship_objp was hit and we've determined he's been killed!  By *other_obj!

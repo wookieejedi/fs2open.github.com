@@ -3624,12 +3624,22 @@ int CFred_mission_save::save_objects()
 
 		// optional alternate type name
 		if (strlen(Fred_alt_names[i])) {
-			fout("\n$Alt: %s\n", Fred_alt_names[i]);
+			if (optional_string_fred("$Alt:", "$Team:")) {
+				parse_comments();
+			} else {
+				fout("\n$Alt:");
+			}
+			fout(" %s", Fred_alt_names[i]);
 		}
 
 		// optional callsign
 		if (Mission_save_format != FSO_FORMAT_RETAIL && strlen(Fred_callsigns[i])) {
-			fout("\n$Callsign: %s\n", Fred_callsigns[i]);
+			if (optional_string_fred("$Callsign:", "$Team:")) {
+				parse_comments();
+			} else {
+				fout("\n$Callsign:");
+			}
+			fout(" %s", Fred_callsigns[i]);
 		}
 
 		required_string_fred("$Team:");
@@ -3712,17 +3722,17 @@ int CFred_mission_save::save_objects()
 			}
 
 			z = shipp->arrival_anchor;
-			if (z & SPECIAL_ARRIVAL_ANCHOR_FLAG) {
+			if (z < 0) {
+				fout(" <error>");
+			} else if (z & SPECIAL_ARRIVAL_ANCHOR_FLAG) {
 				// get name
 				char tmp[NAME_LENGTH + 15];
 				stuff_special_arrival_anchor_name(tmp, z, Mission_save_format == FSO_FORMAT_RETAIL ? 1 : 0);
 
 				// save it
 				fout(" %s", tmp);
-			} else if (z >= 0) {
-				fout(" %s", Ships[z].ship_name);
 			} else {
-				fout(" <error>");
+				fout(" %s", Ships[z].ship_name);
 			}
 		}
 
@@ -5063,17 +5073,17 @@ int CFred_mission_save::save_wings()
 				fout("\n$Arrival Anchor:");
 
 			z = Wings[i].arrival_anchor;
-			if (z & SPECIAL_ARRIVAL_ANCHOR_FLAG) {
+			if (z < 0) {
+				fout(" <error>");
+			} else if (z & SPECIAL_ARRIVAL_ANCHOR_FLAG) {
 				// get name
 				char tmp[NAME_LENGTH + 15];
 				stuff_special_arrival_anchor_name(tmp, z, Mission_save_format == FSO_FORMAT_RETAIL ? 1 : 0);
 
 				// save it
 				fout(" %s", tmp);
-			} else if (z >= 0) {
-				fout(" %s", Ships[z].ship_name);
 			} else {
-				fout(" <error>");
+				fout(" %s", Ships[z].ship_name);
 			}
 		}
 
@@ -5194,30 +5204,39 @@ int CFred_mission_save::save_wings()
 		} else
 			fout("\n+Flags: (");
 
+		auto get_flag_name = [](Ship::Wing_Flags flag) -> const char* {
+			for (size_t i = 0; i < Num_parse_wing_flags; ++i) {
+				if (Parse_wing_flags[i].def == flag) {
+					return Parse_wing_flags[i].name;
+				}
+			}
+			return nullptr;
+		};
+
 		if (Wings[i].flags[Ship::Wing_Flags::Ignore_count])
-			fout(" \"ignore-count\"");
+			fout(" \"%s\"", get_flag_name(Ship::Wing_Flags::Ignore_count));
 		if (Wings[i].flags[Ship::Wing_Flags::Reinforcement])
-			fout(" \"reinforcement\"");
+			fout(" \"%s\"", get_flag_name(Ship::Wing_Flags::Reinforcement));
 		if (Wings[i].flags[Ship::Wing_Flags::No_arrival_music])
-			fout(" \"no-arrival-music\"");
+			fout(" \"%s\"", get_flag_name(Ship::Wing_Flags::No_arrival_music));
 		if (Wings[i].flags[Ship::Wing_Flags::No_arrival_message])
-			fout(" \"no-arrival-message\"");
+			fout(" \"%s\"", get_flag_name(Ship::Wing_Flags::No_arrival_message));
 		if (Wings[i].flags[Ship::Wing_Flags::No_first_wave_message])
-			fout(" \"no-first-wave-message\"");
+			fout(" \"%s\"", get_flag_name(Ship::Wing_Flags::No_first_wave_message));
 		if (Wings[i].flags[Ship::Wing_Flags::No_arrival_warp])
-			fout(" \"no-arrival-warp\"");
+			fout(" \"%s\"", get_flag_name(Ship::Wing_Flags::No_arrival_warp));
 		if (Wings[i].flags[Ship::Wing_Flags::No_departure_warp])
-			fout(" \"no-departure-warp\"");
+			fout(" \"%s\"", get_flag_name(Ship::Wing_Flags::No_departure_warp));
 		if (Wings[i].flags[Ship::Wing_Flags::No_dynamic])
-			fout(" \"no-dynamic\"");
+			fout(" \"%s\"", get_flag_name(Ship::Wing_Flags::No_dynamic));
 		if (Mission_save_format != FSO_FORMAT_RETAIL)
 		{
 			if (Wings[i].flags[Ship::Wing_Flags::Nav_carry])
-				fout(" \"nav-carry-status\"");
+				fout(" \"%s\"", get_flag_name(Ship::Wing_Flags::Nav_carry));
 			if (Wings[i].flags[Ship::Wing_Flags::Same_arrival_warp_when_docked])
-				fout(" \"same-arrival-warp-when-docked\"");
+				fout(" \"%s\"", get_flag_name(Ship::Wing_Flags::Same_arrival_warp_when_docked));
 			if (Wings[i].flags[Ship::Wing_Flags::Same_departure_warp_when_docked])
-				fout(" \"same-departure-warp-when-docked\"");
+				fout(" \"%s\"", get_flag_name(Ship::Wing_Flags::Same_departure_warp_when_docked));
 		}
 
 		fout(" )");
