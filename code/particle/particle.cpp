@@ -194,6 +194,23 @@ namespace particle
 		return {new_particle_ptr};
 	}
 
+	float getPixelSize(const particle& subject_particle) {
+		vec3d world_pos = subject_particle.pos;
+
+		if (subject_particle.attached_objnum >= 0) {
+			vm_vec_unrotate(&world_pos, &world_pos, &Objects[subject_particle.attached_objnum].orient);
+			world_pos += Objects[subject_particle.attached_objnum].pos;
+		}
+
+		float distance_to_eye = vm_vec_dist(&Eye_position, &world_pos);
+
+		return convert_distance_and_diameter_to_pixel_size(
+			distance_to_eye,
+			subject_particle.radius * 2.f,
+			g3_get_hfov(Eye_fov),
+			gr_screen.max_w);
+	}
+
 	/**
 	 * @brief Moves a single particle
 	 * @param frametime The length of the current frame
