@@ -306,6 +306,24 @@ auto ScreenShakeOption = options::OptionBuilder<bool>("Graphics.ScreenShake",
                      .parser(parse_screenshake_func)
                      .finish();
 
+static void parse_playermuzzle_func()
+{
+	bool enabled;
+	stuff_boolean(&enabled);
+	Render_player_mflash = enabled;
+}
+
+auto PlayerMuzzleOption = options::OptionBuilder<bool>("Graphics.PlayerMuzzle",
+	std::pair<const char*, int>{"Player Muzzle Flash", 1892},
+	std::pair<const char*, int>{"Toggles if muzzle flashes appear for the player in first-person view", 1893})
+							 .category(std::make_pair("Graphics", 1825))
+							 .default_func([]() { return Render_player_mflash; })
+							 .level(options::ExpertLevel::Advanced)
+							 .importance(55)
+							 .bind_to(&Render_player_mflash)
+							 .parser(parse_playermuzzle_func)
+							 .finish();
+
 bool Allow_unfocused_pause = true;
 
 static SCP_string unfocused_pause_display(bool mode) { return mode ? XSTR("Yes", 1394) : XSTR("No", 1395); }
