@@ -2673,8 +2673,7 @@ int button_function(int n)
 					snd_play(gamesnd_get_game_sound(GameSounds::TARGET_FAIL));
 					break;
 				}
-
-				hud_target_closest(iff_get_attacker_mask(obj_team(&Objects[Player_ai->target_objnum])), Player_ai->target_objnum);
+				hud_target_closest(iff_get_attacker_mask(obj_team(&Objects[Player_ai->target_objnum])), Player_ai->target_objnum, 1, 1, 1);
 				break;
 
 			// target closest ship that is attacking player

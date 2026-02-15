@@ -83,6 +83,7 @@ typedef struct esct
 	int				team_mask;
 	int				filter;
 	ship*				shipp;
+	vec3d*				base_position;
 	float				min_distance;
 	int				check_nearest_turret;
 	int				attacked_objnum;
@@ -94,7 +95,7 @@ bool evaluate_ship_as_closest_target(esct *esct);
 void	hud_init_targeting();
 void	hud_target_next(int team_mask = -1);
 void	hud_target_prev(int team_mask = -1);
-int	hud_target_closest(int team_mask = -1, int attacked_objnum = -1, int play_fail_sound = TRUE, int filter = 0, int turret_attacking_target = 0);
+int	hud_target_closest(int team_mask = -1, int attacked_objnum = -1, int play_fail_sound = TRUE, int filter = 0, int turret_attacking_target = 0, int use_attacked_pos = 0);
 void	hud_target_in_reticle_old();
 void	hud_target_in_reticle_new();
 void	hud_target_subsystem_in_reticle();

@@ -1355,6 +1355,7 @@ static object* select_next_target_by_distance(const bool targeting_from_closest_
             // attacker logic does it.  --Mastadon
             eval_ship_as_closest_target_args.turret_attacking_target = 1;
             eval_ship_as_closest_target_args.shipp = prospective_victim_ship_ptr;
+			eval_ship_as_closest_target_args.base_position = &Player_obj->pos;
             evaluate_ship_as_closest_target(&eval_ship_as_closest_target_args);
 
             new_distance = eval_ship_as_closest_target_args.min_distance;
@@ -2061,7 +2062,7 @@ float hud_find_target_distance( object *targetee, object *targeter )
 ///                       player. Otherwise, returns false.
 bool evaluate_ship_as_closest_target(esct *esct_p)
 {
-	int targeting_player, turret_is_attacking;
+	int turret_is_attacking;
 	ship_subsys *ss;
 	float new_distance;
 
@@ -2076,9 +2077,6 @@ bool evaluate_ship_as_closest_target(esct *esct_p)
 	if (objp->type != OBJ_SHIP) {
 		return false;
 	}
-
-	// player being targeted, so we will want closest distance from player
-	targeting_player = (esct_p->attacked_objnum == OBJ_INDEX(Player_obj));
 
 	// filter on team
 	if ( !iff_matches_mask(esct_p->shipp->team, esct_p->team_mask) ) {
@@ -2125,7 +2123,7 @@ bool evaluate_ship_as_closest_target(esct *esct_p)
 						// get world pos of subsystem
 						vm_vec_unrotate(&gsubpos, &ss->system_info->pnt, &objp->orient);
 						vm_vec_add2(&gsubpos, &objp->pos);
-						new_distance = vm_vec_dist_quick(&gsubpos, &Player_obj->pos);
+						new_distance = vm_vec_dist_quick(&gsubpos, esct_p->base_position);
 
 						/*
 						// GET TURRET TYPE, FAVOR BEAM, FLAK, OTHER
@@ -2146,6 +2144,9 @@ bool evaluate_ship_as_closest_target(esct *esct_p)
 		}
 	}
 
+	// player being targeted, so we will want closest distance from player
+	int targeting_player = (esct_p->attacked_objnum == OBJ_INDEX(Player_obj));
+
 	// If no turret is attacking, check if objp is actually targeting attacked_objnum
 	// don't bail if targeting is for player
 	if ( !targeting_player && !turret_is_attacking ) {
@@ -2165,7 +2166,7 @@ bool evaluate_ship_as_closest_target(esct *esct_p)
 		// Volition switched distance evaluation methods here... presumably this is to prioritize small fighters when dogfighting next to large ships...
 		// Since this is used specifically for finding an ordering of targets and does not involve any visual displays, distance-to-center is reasonable.
 		//new_distance = hud_find_target_distance(objp, Player_obj);
-		new_distance = vm_vec_dist_quick(&objp->pos, &Player_obj->pos);
+		new_distance = vm_vec_dist_quick(&objp->pos, esct_p->base_position);
 
 		if (new_distance <= esct_p->min_distance) {
 			esct_p->min_distance = new_distance;
@@ -2204,7 +2205,7 @@ bool evaluate_ship_as_closest_target(esct *esct_p)
 ///
 /// \return: true (non-zero) if a target was acquired. Returns false (zero) if
 ///          no target was acquired.
-int hud_target_closest(int team_mask, int attacked_objnum, int play_fail_snd, int filter, int get_closest_turret_attacking_player)
+int hud_target_closest(int team_mask, int attacked_objnum, int play_fail_snd, int filter, int get_closest_turret_attacking_player, int use_attacked_pos)
 {
 	object	*A;
 	object	*nearest_obj = &obj_used_list;
@@ -2249,6 +2250,11 @@ int hud_target_closest(int team_mask, int attacked_objnum, int play_fail_snd, in
 	eval_ship_as_closest_target_args.team_mask = team_mask;
 	eval_ship_as_closest_target_args.attacked_objnum = attacked_objnum;
 	eval_ship_as_closest_target_args.turret_attacking_target = get_closest_turret_attacking_player;
+	if (use_attacked_pos) {
+		eval_ship_as_closest_target_args.base_position = &Objects[attacked_objnum].pos;
+	} else {
+		eval_ship_as_closest_target_args.base_position = &Player_obj->pos;
+	}
 
 	for ( so=GET_FIRST(&Ship_obj_list); so!=END_OF_LIST(&Ship_obj_list); so=GET_NEXT(so) ) {
 		A = &Objects[so->objnum];
