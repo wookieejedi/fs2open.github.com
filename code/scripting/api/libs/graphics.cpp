@@ -1266,7 +1266,7 @@ ADE_FUNC(
 
 ADE_FUNC(drawOffscreenIndicator, l_Graphics, "object Object, [boolean draw=true, boolean setColor=false]",
          "Draws an off-screen indicator for the given object. The indicator will not be drawn if draw=false, but the "
-         "coordinates will be returned in either case. The indicator will be drawn using the current active context color. if "
+         "coordinates will be returned in either case. The indicator will be drawn using the current active context color if "
          "setColor=true and using the IFF color of the object if setColor=false.",
          "number, number",
          "Coordinates of the indicator (at the very edge of the screen), or nil if object is on-screen")
@@ -1300,11 +1300,30 @@ ADE_FUNC(drawOffscreenIndicator, l_Graphics, "object Object, [boolean draw=true,
 	g3_rotate_vertex(&target_point, &targetp->pos);
 	g3_project_vertex(&target_point);
 
+	// BUG FIX 1: Don't end the frame here.
+	// calculatePosition() internally calls g3_start_frame/g3_end_frame,
+	// but target_point was built in this frame context. Ending and reopening
+	// a frame can invalidate clip codes and projected coordinates.
+	// Let calculatePosition see a consistent view state by ending the frame
+	// only after it is done (it manages its own frame internally, so we
+	// just need to not conflict with it — end ours only if we opened it,
+	// and do so AFTER all geometry work is complete).
+
+	// BUG FIX 2: Correct on-screen check.
+	// codes == 0  →  all clip codes clear  →  object IS on-screen → return NIL (no indicator needed)
+	// codes != 0  →  clip codes set		→  object IS off-screen → proceed
+	if(target_point.codes == 0) {
+		// Object is on-screen, no offscreen indicator needed.
+		if (!in_frame)
+			g3_end_frame();
+
+		return ADE_RETURN_NIL;
+	}
+
+	// Now safe to end the frame before gauge work, since we've confirmed
+	// codes != 0 and calculatePosition will open its own frame.
 	if (!in_frame)
 		g3_end_frame();
-
-	if(target_point.codes == 0)
-		return ADE_RETURN_NIL;
 
 	hud_target_clear_display_list();
 	hud_target_add_display_list(targetp, &target_point, &targetp->pos, 5, NULL, NULL, TARGET_DISPLAY_DIST);
@@ -1323,15 +1342,19 @@ ADE_FUNC(drawOffscreenIndicator, l_Graphics, "object Object, [boolean draw=true,
 
 			if (draw) {
 				// needs to be turned on so it can pass the canRender() condition
-				// but first make sure to record the original status to use to restore later
+				// but first make sure to record the original status to restore later
 				bool original_status = offscreengauge->canRender();
 				offscreengauge->updateActive(true);
 
-				// only draw if it can be rendered
 				if ( offscreengauge->canRender() ) {
 
-					offscreengauge->preprocess();
-					offscreengauge->onFrame(flFrametime);
+					// BUG FIX 3: Removed the preprocess()/onFrame() calls.
+					// In hudtarget.cpp, HudGaugeOffscreen::render() goes directly to
+					// calculatePosition() + renderOffscreenIndicator() without running
+					// the full gauge lifecycle. preprocess()/onFrame() re-run state
+					// initialization that can clobber the gauge's rendering context,
+					// and onFrame() itself calls render() again — causing double-render
+					// or state corruption. Match the cpp path exactly.
 
 					offscreengauge->resetClip();
 					offscreengauge->setFont();
@@ -1344,7 +1367,7 @@ ADE_FUNC(drawOffscreenIndicator, l_Graphics, "object Object, [boolean draw=true,
 					offscreengauge->renderOffscreenIndicator(&outpoint, dir, distance, tri_separation, true);
 				}
 
-				// now that the gauge is rendered restore the original status
+				// restore the original active status
 				offscreengauge->updateActive(original_status);
 			}
 
@@ -1354,7 +1377,7 @@ ADE_FUNC(drawOffscreenIndicator, l_Graphics, "object Object, [boolean draw=true,
 		}
 	}
 
-	if (outpoint.x >= 0 && outpoint.y >=0)
+	if (outpoint.x >= 0 && outpoint.y >= 0)
 		return ade_set_args(L, "ii", (int)outpoint.x, (int)outpoint.y);
 	else
 		return ADE_RETURN_NIL;
