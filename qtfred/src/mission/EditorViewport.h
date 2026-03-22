@@ -60,8 +60,8 @@ class EditorViewport {
 	fix lasttime = 0;
 
 	bool inc_mission_time();
-	void process_system_keys(int key);
-	void process_controls(vec3d* pos, matrix* orient, float frametime, int key, int mode = 0);
+	void process_system_keys();
+	void process_controls(vec3d* pos, matrix* orient, float frametime, int mode = 0);
 	void level_object(matrix* orient);
 
 	void initialSetup();
@@ -105,6 +105,7 @@ class EditorViewport {
 	int drag_objects(int x, int y);
 
 	int drag_rotate_objects(int mouse_dx, int mouse_dy);
+	void cancel_drag();
 
 	void view_universe(bool just_marked);
 
@@ -176,5 +177,4 @@ class EditorViewport {
 
 }
 }
-
 
