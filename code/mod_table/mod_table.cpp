@@ -186,6 +186,7 @@ bool Zero_radius_explosions_skip_fireballs;
 
 
 #ifdef WITH_DISCORD
+// coverity[GLOBAL_INIT_ORDER] -- safe; OptionBuilder::finish() uses Meyers singleton
 static auto DiscordOption __UNUSED = options::OptionBuilder<bool>("Game.Discord",
                      std::pair<const char*, int>{"Discord Presence", 1754},
                      std::pair<const char*, int>{"Toggle Discord Rich Presence", 1755})

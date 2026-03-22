@@ -91,6 +91,7 @@ static void parse_flight_mode_func()
 	}
 }
 
+// coverity[GLOBAL_INIT_ORDER] -- safe; OptionBuilder::finish() uses Meyers singleton
 auto FlightModeOption = options::OptionBuilder<FlightMode>("Game.FlightMode",
 	std::pair<const char*, int>{"Flight Mode", 1842},
 	std::pair<const char*, int>{"Choose the flying style to use during gameplay.", 1843})
@@ -123,6 +124,7 @@ static void parse_flight_cursor_extent_func()
 	Flight_cursor_extent = value;
 }
 
+// coverity[GLOBAL_INIT_ORDER] -- safe; OptionBuilder::finish() uses Meyers singleton
 auto FlightCursorExtentOption = options::OptionBuilder<float>("Game.FlightCursorExtent",
 	std::pair<const char*, int>{"Flight Cursor Extent", 1846},
 	std::pair<const char*, int>{"How far from the center the cursor can go.", 1847})
@@ -146,6 +148,7 @@ static void parse_cursor_deadzone_func()
 	Flight_cursor_deadzone = value;
 }
 
+// coverity[GLOBAL_INIT_ORDER] -- safe; OptionBuilder::finish() uses Meyers singleton
 auto FlightCursorDeadzoneOption = options::OptionBuilder<float>("Game.FlightCursorDeadzone",
 	std::pair<const char*, int>{"Flight Cursor Deadzone", 1848},
 	std::pair<const char*, int>{"How far from the center the cursor needs to go before registering.", 1849})

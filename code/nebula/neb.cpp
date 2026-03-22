@@ -151,6 +151,7 @@ static void parse_nebula_detail_func()
 	}
 }
 
+// coverity[GLOBAL_INIT_ORDER] -- safe; OptionBuilder::finish() uses Meyers singleton
 const auto NebulaDetailOption __UNUSED = options::OptionBuilder<int>("Graphics.NebulaDetail",
                      std::pair<const char*, int>{"Nebula Detail", 1361},
                      std::pair<const char*, int>{"Detail level of nebulas", 1697})
