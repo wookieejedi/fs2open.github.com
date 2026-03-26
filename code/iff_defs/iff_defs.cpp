@@ -46,6 +46,7 @@ static bool AccessiblitySupported = false;
 // used by In-Game Options menu
 static bool AccessibilityEnabled = false;
 
+// coverity[GLOBAL_INIT_ORDER] -- safe; OptionBuilder::finish() uses Meyers singleton
 static auto AccessibilityOption = options::OptionBuilder<bool>("Game.IffAccessibility",
 	std::pair<const char*, int>{"Accessibility IFF Colors", 1855},
 	std::pair<const char*, int>{"Enables or disables IFF Accessibility color overrides", 1856})

@@ -72,6 +72,7 @@ static void parse_texture_filtering_func()
 	}
 }
 
+// coverity[GLOBAL_INIT_ORDER] -- safe; OptionBuilder::finish() uses Meyers singleton
 static auto TextureFilteringOption __UNUSED = options::OptionBuilder<int>("Graphics.TextureFilter",
                      std::pair<const char*, int>{"Texture Filtering", 1763},
                      std::pair<const char*, int>{"Texture filtering option", 1764})
@@ -125,6 +126,7 @@ static float anisotropic_default()
 	return max;
 }
 
+// coverity[GLOBAL_INIT_ORDER] -- safe; OptionBuilder::finish() uses Meyers singleton
 static auto AnisotropyOption = options::OptionBuilder<float>("Graphics.Anisotropy",
                      std::pair<const char*, int>{"Anistropic filtering", 1736},
                      std::pair<const char*, int>{"Controls the amount of anistropic filtering of the textures", 1737})

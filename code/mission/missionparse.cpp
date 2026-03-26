@@ -100,6 +100,7 @@ LOCAL struct {
 
 int Total_initially_docked;
 
+// coverity[GLOBAL_INIT_ORDER] -- safe; default-constructed, no cross-TU dependencies
 mission	The_mission;
 char Mission_filename[80];
 
@@ -123,6 +124,7 @@ ushort Current_file_checksum = 0;
 ushort Last_file_checksum = 0;
 int    Current_file_length   = 0;
 
+// coverity[GLOBAL_INIT_ORDER] -- safe; default-constructed, no cross-TU dependencies
 SCP_vector<mission_default_custom_data> Default_custom_data;
 
 // alternate ship type names
@@ -137,9 +139,11 @@ int Mission_callsign_count = 0;
 
 // the ship arrival list will contain a list of ships that are yet to arrive.  This
 // list could also include ships that are part of wings!
+// coverity[GLOBAL_INIT_ORDER] -- safe; default-constructed, no cross-TU dependencies
 p_object Ship_arrival_list;	// for linked list of ships to arrive later
 
 // all the ships that we parse
+// coverity[GLOBAL_INIT_ORDER] -- safe; default-constructed, no cross-TU dependencies
 SCP_vector<p_object> Parse_objects;
 
 // all the props that we parse
@@ -147,6 +151,7 @@ SCP_vector<parsed_prop> Parse_props;
 
 
 // list for arriving support ship
+// coverity[GLOBAL_INIT_ORDER] -- safe; default-constructed, no cross-TU dependencies
 p_object	Support_ship_pobj;
 p_object *Arriving_support_ship;
 char Arriving_repair_targets[MAX_AI_GOALS][NAME_LENGTH];

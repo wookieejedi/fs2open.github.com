@@ -165,6 +165,7 @@ static void parse_gamma_func()
 	error_display(0, "%f is not a valid gamma value! (Invalid increment)", value);
 }
 
+// coverity[GLOBAL_INIT_ORDER] -- safe; OptionBuilder::finish() uses Meyers singleton
 static auto GammaOption __UNUSED = options::OptionBuilder<float>("Graphics.Gamma",
                      std::pair<const char*, int>{"Brightness", 1375},
                      std::pair<const char*, int>{"The brightness value used for the game window", 1738})
@@ -199,6 +200,7 @@ const SCP_vector<std::pair<int, std::pair<const char*, int>>> DetailLevelValues 
                                                                                    { 3, {"High", 1162}},
                                                                                    { 4, {"Ultra", 1721}}};
 
+// coverity[GLOBAL_INIT_ORDER] -- safe; OptionBuilder::finish() uses Meyers singleton
 const auto LightingOption __UNUSED = options::OptionBuilder<int>("Graphics.Lighting",
                      std::pair<const char*, int>{"Lighting", 1367},
                      std::pair<const char*, int>{"Level of detail of the lighting", 1715})
@@ -252,6 +254,7 @@ static void parse_window_mode_func()
 	}
 }
 
+// coverity[GLOBAL_INIT_ORDER] -- safe; OptionBuilder::finish() uses Meyers singleton
 static auto WindowModeOption __UNUSED = options::OptionBuilder<os::ViewportState>("Graphics.WindowMode",
                      std::pair<const char*, int>{"Window Mode", 1772},
                      std::pair<const char*, int>{"Controls how the game window is created", 1773})
@@ -271,6 +274,7 @@ void removeWindowModeOption()
 	options::OptionsManager::instance()->removeOption(WindowModeOption);
 }
 
+// coverity[GLOBAL_INIT_ORDER] -- safe; Hook::Factory() uses Meyers singleton
 const std::shared_ptr<scripting::OverridableHook<>> OnFrameHook = scripting::OverridableHook<>::Factory(
 	"On Frame", "Called every frame as the last action before showing the frame result to the user.", {}, std::nullopt, CHA_ONFRAME);
 
@@ -354,6 +358,7 @@ static bool videodisplay_change(int display, bool initial)
 // Video display cannot support default settings because graphics have not been
 // initialized so we can't validate the setting. But also, this should probably
 // only ever be a user setting
+// coverity[GLOBAL_INIT_ORDER] -- safe; OptionBuilder::finish() uses Meyers singleton
 static auto VideoDisplayOption = options::OptionBuilder<int>("Graphics.Display",
                      std::pair<const char*, int>{"Primary display", 1741},
                      std::pair<const char*, int>{"The display used for rendering", 1742})
@@ -490,6 +495,7 @@ static bool resolution_vr_change(const ResolutionInfo& /*info*/, bool initial)
 // Resolution cannot support default settings because graphics have not been
 // initialized so we can't validate the setting. But also, this should probably
 // only ever be a user setting
+// coverity[GLOBAL_INIT_ORDER] -- safe; OptionBuilder::finish() uses Meyers singleton
 static auto ResolutionOption = options::OptionBuilder<ResolutionInfo>("Graphics.Resolution",
                      std::pair<const char*, int>{"Resolution", 1748},
                      std::pair<const char*, int>{"The rendering resolution", 1749})
@@ -509,6 +515,7 @@ void removeResolutionOption()
 	options::OptionsManager::instance()->removeOption(ResolutionOption);
 }
 
+// coverity[GLOBAL_INIT_ORDER] -- safe; OptionBuilder::finish() uses Meyers singleton
 static auto ResolutionVROption = options::OptionBuilder<ResolutionInfo>("Graphics.ResolutionVR",
 	std::pair<const char*, int>{"VR Resolution", 1878},
 	std::pair<const char*, int>{"The rendering resolution when in VR mode", 1879})
@@ -537,6 +544,7 @@ static void parse_soft_particle_func() {
 	Gr_enable_soft_particles = value;
 }
 
+// coverity[GLOBAL_INIT_ORDER] -- safe; OptionBuilder::finish() uses Meyers singleton
 static auto SoftParticlesOption __UNUSED = options::OptionBuilder<bool>("Graphics.SoftParticles",
                      std::pair<const char*, int>{"Soft Particles", 1761},
                      std::pair<const char*, int>{"Enable or disable soft particle rendering", 1762})
@@ -577,6 +585,7 @@ static void parse_framebuffer_func() {
     }
 }
 
+// coverity[GLOBAL_INIT_ORDER] -- safe; OptionBuilder::finish() uses Meyers singleton
 static auto FramebufferEffectsOption __UNUSED = options::OptionBuilder<flagset<FramebufferEffects>>("Graphics.FramebufferEffects",
                      std::pair<const char*, int>{"Framebuffer effects", 1732},
                      std::pair<const char*, int>{"Controls which framebuffer effects will be applied to the scene", 1733})
@@ -622,6 +631,7 @@ static void parse_anti_aliasing_func() {
 	}
 }
 
+// coverity[GLOBAL_INIT_ORDER] -- safe; OptionBuilder::finish() uses Meyers singleton
 static auto AAOption __UNUSED = options::OptionBuilder<AntiAliasMode>("Graphics.AAMode",
                      std::pair<const char*, int>{"Anti Aliasing", 1752},
                      std::pair<const char*, int>{"Controls the anti aliasing mode of the engine.", 1753})
@@ -669,6 +679,7 @@ static void parse_msaa_func()
 	}
 }
 
+// coverity[GLOBAL_INIT_ORDER] -- safe; OptionBuilder::finish() uses Meyers singleton
 static auto MSAAOption __UNUSED = options::OptionBuilder<int>("Graphics.MSAASamples",
                      std::pair<const char*, int>{"Multisample Anti Aliasing", 1758},
                      std::pair<const char*, int>{"Controls whether multisample anti asliasing is enabled, and with how many samples", 1759})
@@ -701,6 +712,7 @@ static void parse_post_processing_func()
 
 bool Gr_post_processing_enabled = true;
 
+// coverity[GLOBAL_INIT_ORDER] -- safe; OptionBuilder::finish() uses Meyers singleton
 static auto PostProcessOption __UNUSED = options::OptionBuilder<bool>("Graphics.PostProcessing",
                      std::pair<const char*, int>{"Post processing", 1726},
                      std::pair<const char*, int>{"Controls whether post processing is enabled in the engine.", 1727})
@@ -722,6 +734,7 @@ static void parse_vsync_func()
 	Gr_enable_vsync = value;
 }
 
+// coverity[GLOBAL_INIT_ORDER] -- safe; OptionBuilder::finish() uses Meyers singleton
 static auto VSyncOption __UNUSED = options::OptionBuilder<bool>("Graphics.VSync",
                      std::pair<const char*, int>{"Vertical Sync", 1766},
                      std::pair<const char*, int>{"Controls how the engine does vertical synchronization", 1767})

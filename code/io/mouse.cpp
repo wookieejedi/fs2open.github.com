@@ -56,6 +56,7 @@ int Mouse_dz = 0;
 
 int Mouse_sensitivity = 4;
 
+// coverity[GLOBAL_INIT_ORDER] -- safe; OptionBuilder::finish() uses Meyers singleton
 static auto MouseSensitivityOption __UNUSED = options::OptionBuilder<int>("Input.MouseSensitivity",
                      std::pair<const char*, int>{"Sensitivity", 1374},
                      std::pair<const char*, int>{"The sensitivity of the mouse input", 1747})
@@ -72,6 +73,7 @@ bool Use_mouse_to_fly = false;
 
 static SCP_string mouse_mode_display(bool mode) { return mode ? XSTR("Joy-0", 1699) : XSTR("Mouse", 1373); }
 
+// coverity[GLOBAL_INIT_ORDER] -- safe; OptionBuilder::finish() uses Meyers singleton
 static auto UseMouseOption __UNUSED = options::OptionBuilder<bool>("Input.UseMouse",
                      std::pair<const char*, int>{"Mouse", 1373},
                      std::pair<const char*, int>{"Whether or not to use the mouse for flying", 1765})
