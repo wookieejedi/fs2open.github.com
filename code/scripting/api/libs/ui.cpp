@@ -719,7 +719,7 @@ ADE_FUNC(initBriefing,
 {
 	SCP_UNUSED(L);
 
-	brief_api_init();
+	brief_init(true);
 
 	return ADE_RETURN_NIL;
 }
@@ -732,7 +732,7 @@ ADE_FUNC(closeBriefing,
 	nullptr)
 {
 	SCP_UNUSED(L);
-	brief_api_close();
+	brief_close(true);
 	return ADE_RETURN_NIL;
 }
 
@@ -964,7 +964,7 @@ ADE_FUNC(drawBriefingMap,
 	bscreen.map_y2 = y1 + y2;
 	bscreen.resize = GR_RESIZE_NONE;
 
-	brief_api_do_frame(flRealframetime);
+	brief_do_frame(flRealframetime, true);
 
 	return ADE_RETURN_NIL;
 }
