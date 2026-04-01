@@ -26,7 +26,7 @@ class waypoint
 		void set_pos(const vec3d *pos);
 
 	private:
-		vec3d m_position;
+		vec3d m_parsed_position;	// only relevant until the game object is created, after which the waypoint delegates to the object position
 		int m_objnum;
 
 	friend void waypoint_create_game_object(waypoint *wpt, int list_index, int wpt_index);

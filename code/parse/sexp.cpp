@@ -9512,7 +9512,6 @@ void sexp_set_object_position(int n)
 
 		case OSWPT_TYPE_WAYPOINT:
 		{
-			oswpt.objp()->pos = target_vec;
 			oswpt.waypointp()->set_pos(&target_vec);
 			Current_sexp_network_packet.start_callback();
 			Current_sexp_network_packet.send_ushort(oswpt.objp()->net_signature);
@@ -9600,7 +9599,6 @@ void multi_sexp_set_object_position()
 	Current_sexp_network_packet.get_float(wp_vec.xyz.z);
 	objp = multi_get_network_object(obj_sig);
 	if (objp->type == OBJ_WAYPOINT) {
-		objp->pos = wp_vec;
 		waypoint *wpt = find_waypoint_with_instance(objp->instance);
 		wpt->set_pos(&wp_vec);
 	}
