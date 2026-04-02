@@ -66,17 +66,17 @@ void AboutDialog::on_scpCreditsButton_clicked()
 	dialog->show();
 }
 
-void AboutDialog::on_reportBugButton_clicked()
+void AboutDialog::on_reportBugButton_clicked() // NOLINT(readability-convert-member-functions-to-static)
 {
 	QDesktopServices::openUrl(QUrl("https://github.com/scp-fs2open/fs2open.github.com/issues", QUrl::TolerantMode));
 }
 
-void AboutDialog::on_visitForumsButton_clicked()
+void AboutDialog::on_visitForumsButton_clicked() // NOLINT(readability-convert-member-functions-to-static)
 {
 	QDesktopServices::openUrl(QUrl("https://www.hard-light.net/forums/", QUrl::TolerantMode));
 }
 
-void AboutDialog::on_aboutQtButton_clicked()
+void AboutDialog::on_aboutQtButton_clicked() // NOLINT(readability-convert-member-functions-to-static)
 {
 	QApplication::aboutQt();
 }

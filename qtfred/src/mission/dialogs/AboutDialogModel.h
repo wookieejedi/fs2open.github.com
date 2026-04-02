@@ -15,12 +15,12 @@ public:
 	bool apply() override;
 	void reject() override;
 
-	SCP_string getVersionString() const;
-	SCP_string getCopyrightString() const;
-	SCP_vector<SCP_string> getQtFREDCredits() const;
-	SCP_vector<SCP_string> getGraphicsCredits() const;
-	SCP_string getSCPCreditsText() const;
-	SCP_string getQuoteString() const;
+	static SCP_string getVersionString();
+	static SCP_string getCopyrightString();
+	static SCP_vector<SCP_string> getQtFREDCredits();
+	static SCP_vector<SCP_string> getGraphicsCredits();
+	static SCP_string getSCPCreditsText();
+	static SCP_string getQuoteString();
 };
 
 } // namespace fso::fred::dialogs

@@ -19,7 +19,7 @@ public:
 	explicit AboutDialog(QWidget* parent, EditorViewport* viewport);
 	~AboutDialog() override;
 
-private slots:
+private slots: // NOLINT(readability-redundant-access-specifiers)
 	void on_scpCreditsButton_clicked();
 	void on_reportBugButton_clicked();
 	void on_visitForumsButton_clicked();

@@ -23,7 +23,7 @@ void AboutDialogModel::reject()
 {
 }
 
-SCP_string AboutDialogModel::getVersionString() const
+SCP_string AboutDialogModel::getVersionString()
 {
 	SCP_string graphicsAPI;
 	switch (gr_screen.mode) {
@@ -44,12 +44,12 @@ SCP_string AboutDialogModel::getVersionString() const
 	return result;
 }
 
-SCP_string AboutDialogModel::getCopyrightString() const
+SCP_string AboutDialogModel::getCopyrightString()
 {
 	return "Based on FRED2_OPEN: Copyright \xc2\xa9 1999 Volition, Inc. All Rights Reserved";
 }
 
-SCP_vector<SCP_string> AboutDialogModel::getQtFREDCredits() const
+SCP_vector<SCP_string> AboutDialogModel::getQtFREDCredits()
 {
 	return {
 		"Initial Qt port by groscask",
@@ -58,7 +58,7 @@ SCP_vector<SCP_string> AboutDialogModel::getQtFREDCredits() const
 	};
 }
 
-SCP_vector<SCP_string> AboutDialogModel::getGraphicsCredits() const
+SCP_vector<SCP_string> AboutDialogModel::getGraphicsCredits()
 {
 	switch (gr_screen.mode) {
 	case GR_OPENGL:
@@ -73,12 +73,12 @@ SCP_vector<SCP_string> AboutDialogModel::getGraphicsCredits() const
 	return {};
 }
 
-SCP_string AboutDialogModel::getSCPCreditsText() const
+SCP_string AboutDialogModel::getSCPCreditsText()
 {
 	return fs2_open_credit_text;
 }
 
-SCP_string AboutDialogModel::getQuoteString() const
+SCP_string AboutDialogModel::getQuoteString()
 {
 	return "FRED2 has been deprecated. We regret nothing.";
 }
