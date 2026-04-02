@@ -16,6 +16,8 @@
 
 namespace fso::fred::dialogs {
 
+AboutDialog::~AboutDialog() = default;
+
 static QString joinLines(const SCP_vector<SCP_string>& lines)
 {
 	QStringList parts;

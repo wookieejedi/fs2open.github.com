@@ -17,7 +17,7 @@ class AboutDialog : public QDialog {
 
 public:
 	explicit AboutDialog(QWidget* parent, EditorViewport* viewport);
-	~AboutDialog() override = default;
+	~AboutDialog() override;
 
 private slots:
 	void on_scpCreditsButton_clicked();
