@@ -1365,7 +1365,7 @@ void FredView::on_actionError_Checker_triggered(bool) {
 	fred->global_error_check();
 }
 void FredView::on_actionAbout_triggered(bool) {
-	auto dialog = new dialogs::AboutDialog(this);
+	auto dialog = new dialogs::AboutDialog(this, _viewport);
 	dialog->setAttribute(Qt::WA_DeleteOnClose);
 	dialog->show();
 }

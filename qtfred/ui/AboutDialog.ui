@@ -209,21 +209,21 @@
       </widget>
      </item>
      <item>
-      <widget class="QPushButton" name="buttonReportBug">
+      <widget class="QPushButton" name="reportBugButton">
        <property name="text">
         <string>Report a Bug</string>
        </property>
       </widget>
      </item>
      <item>
-      <widget class="QPushButton" name="buttonVisitForums">
+      <widget class="QPushButton" name="visitForumsButton">
        <property name="text">
         <string>Visit Forums</string>
        </property>
       </widget>
      </item>
      <item>
-      <widget class="QPushButton" name="buttonAboutQt">
+      <widget class="QPushButton" name="aboutQtButton">
        <property name="text">
         <string>About Qt</string>
        </property>
@@ -249,22 +249,5 @@
  <resources>
   <include location="../resources/resources.qrc"/>
  </resources>
- <connections>
-  <connection>
-   <sender>okBox</sender>
-   <signal>accepted()</signal>
-   <receiver>fso::fred::dialogs::AboutDialog</receiver>
-   <slot>accept()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>248</x>
-     <y>254</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>157</x>
-     <y>274</y>
-    </hint>
-   </hints>
-  </connection>
- </connections>
+ <connections/>
 </ui>

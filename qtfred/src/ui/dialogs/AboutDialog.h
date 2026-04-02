@@ -1,31 +1,32 @@
 #pragma once
 
+#include <mission/EditorViewport.h>
+#include <mission/dialogs/AboutDialogModel.h>
+
 #include <QDialog>
 #include <memory>
 
-namespace fso {
-namespace fred {
-namespace dialogs {
+namespace fso::fred::dialogs {
 
 namespace Ui {
 class AboutDialog;
 }
 
-class AboutDialog: public QDialog {
- Q_OBJECT
+class AboutDialog : public QDialog {
+	Q_OBJECT
 
- public:
-	explicit AboutDialog(QWidget* parent);
-	~AboutDialog() override;
- private:
-	void onBugPressed();
-	void onForumsPressed();
-	void onAboutQtPressed();
+public:
+	explicit AboutDialog(QWidget* parent, EditorViewport* viewport);
+	~AboutDialog() override = default;
 
+private slots:
+	void on_reportBugButton_clicked();
+	void on_visitForumsButton_clicked();
+	void on_aboutQtButton_clicked();
+
+private:
 	std::unique_ptr<Ui::AboutDialog> ui;
+	std::unique_ptr<AboutDialogModel> _model;
 };
 
-}
-}
-}
-
+} // namespace fso::fred::dialogs
