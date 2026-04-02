@@ -20,6 +20,7 @@ public:
 	~AboutDialog() override = default;
 
 private slots:
+	void on_scpCreditsButton_clicked();
 	void on_reportBugButton_clicked();
 	void on_visitForumsButton_clicked();
 	void on_aboutQtButton_clicked();

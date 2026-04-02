@@ -396,6 +396,7 @@ add_file_folder("Resources/Images"
     resources/images/freddoc.ico
     resources/images/fred.ico
     resources/images/fredknows.png
+	resources/images/fred_about.png
     resources/images/fred_splash.png
     resources/images/green_do.png
 	resources/images/next.png

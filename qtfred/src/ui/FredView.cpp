@@ -403,6 +403,8 @@ void FredView::initializeStatusBar() {
 
 	_statusBarUnitsLabel = new QLabel();
 	statusBar()->addPermanentWidget(_statusBarUnitsLabel);
+
+	statusBar()->showMessage(tr("Every great mission starts here. No pressure."));
 }
 void FredView::updateUI() {
 	if (!_viewport) {

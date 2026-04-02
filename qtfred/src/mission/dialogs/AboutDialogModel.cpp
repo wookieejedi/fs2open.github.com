@@ -5,6 +5,8 @@
 #include <project.h>
 #include <graphics/2d.h>
 
+extern const char* fs2_open_credit_text;
+
 namespace fso::fred::dialogs {
 
 AboutDialogModel::AboutDialogModel(QObject* parent, EditorViewport* viewport)
@@ -40,6 +42,45 @@ SCP_string AboutDialogModel::getVersionString() const
 		result += graphicsAPI;
 	}
 	return result;
+}
+
+SCP_string AboutDialogModel::getCopyrightString() const
+{
+	return "Based on FRED2_OPEN: Copyright \xc2\xa9 1999 Volition, Inc. All Rights Reserved";
+}
+
+SCP_vector<SCP_string> AboutDialogModel::getQtFREDCredits() const
+{
+	return {
+		"Initial Qt port by groscask",
+		"Developed to replace FRED2: Cyborg, m!m, Mike \"MjnMixael\" Nelson, The Force",
+		"With contributions from: BMagnu, DahBlount, Goober5000, jg18, niffiwan, plieblang, the-maddin, z64555",
+	};
+}
+
+SCP_vector<SCP_string> AboutDialogModel::getGraphicsCredits() const
+{
+	switch (gr_screen.mode) {
+	case GR_OPENGL:
+		return {
+			"Ported to OpenGL by RandomTiger",
+			"Original FSO OpenGL port by Phreak and Fry_Day",
+		};
+	case GR_VULKAN:
+		// TODO: Add Vulkan port credits when available
+		return { "Vulkan not ported yet" };
+	}
+	return {};
+}
+
+SCP_string AboutDialogModel::getSCPCreditsText() const
+{
+	return fs2_open_credit_text;
+}
+
+SCP_string AboutDialogModel::getQuoteString() const
+{
+	return "FRED2 has been deprecated. We regret nothing.";
 }
 
 } // namespace fso::fred::dialogs
