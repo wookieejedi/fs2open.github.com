@@ -19,13 +19,13 @@ public:
 	explicit AboutDialog(QWidget* parent, EditorViewport* viewport);
 	~AboutDialog() override;
 
-private slots: // NOLINT(readability-redundant-access-specifiers)
+private slots:
 	void on_scpCreditsButton_clicked();
 	void on_reportBugButton_clicked();
 	void on_visitForumsButton_clicked();
 	void on_aboutQtButton_clicked();
 
-private:
+private: // NOLINT(readability-redundant-access-specifiers)
 	std::unique_ptr<Ui::AboutDialog> ui;
 	std::unique_ptr<AboutDialogModel> _model;
 };
