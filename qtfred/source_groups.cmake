@@ -245,6 +245,10 @@ add_file_folder("Source/UI/Dialogs/ShipEditor"
 	src/ui/dialogs/ShipEditor/WeaponsTBLViewer.cpp
 	src/ui/dialogs/ShipEditor/WeaponsTBLViewer.h
 )
+add_file_folder("Source/UI/Dialogs/EventEditor"
+	src/ui/dialogs/EventEditor/HeadAnimationPickerDialog.cpp
+	src/ui/dialogs/EventEditor/HeadAnimationPickerDialog.h
+)
 add_file_folder("Source/UI/General"
 	src/ui/dialogs/General/CheckBoxListDialog.cpp
 	src/ui/dialogs/General/CheckBoxListDialog.h
