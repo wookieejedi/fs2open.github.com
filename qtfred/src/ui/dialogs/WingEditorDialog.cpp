@@ -6,6 +6,7 @@
 
 #include "ui_WingEditorDialog.h"
 
+#include <globalincs/globals.h>
 #include <ui/util/SignalBlockers.h>
 #include <ui/util/ImageRenderer.h>
 #include <QMessageBox>
@@ -20,6 +21,8 @@ WingEditorDialog::WingEditorDialog(FredView* parent, EditorViewport* viewport)
 
 	ui->HelpTitle->setVisible(viewport->Show_sexp_help_wing_editor);
 	ui->helpText->setVisible(viewport->Show_sexp_help_wing_editor);
+
+	ui->wingNameEdit->setMaxLength(NAME_LENGTH - 1);
 
 	setWindowTitle(tr("Wing Editor"));
 	
@@ -450,7 +453,7 @@ void WingEditorDialog::on_initialOrdersButton_clicked()
 		return;
 	}
 
-	// block for empty wings (matches old FRED behavior where goals apply to the wing�s ships)
+	// block for empty wings (matches old FRED behavior where goals apply to the wing's ships)
 	if (Wings[wingIndex].wave_count <= 0) {
 		QMessageBox::information(this, "Initial Orders", "This wing has no ships (wave_count == 0).");
 		return;
@@ -577,7 +580,7 @@ void WingEditorDialog::on_customWarpinButton_clicked()
 
 void WingEditorDialog::on_arrivalTree_nodeChanged(int newTree)
 {
-	_model->setArrivalTree(newTree); //TODO This seems broken in a wierd way. Will need followup
+	_model->setArrivalTree(newTree); //TODO This seems broken in a weird way. Will need followup
 }
 
 void WingEditorDialog::on_noArrivalWarpCheckBox_toggled(bool checked)
@@ -655,7 +658,7 @@ void WingEditorDialog::on_customWarpoutButton_clicked()
 
 void WingEditorDialog::on_departureTree_nodeChanged(int newTree)
 {
-	_model->setDepartureTree(newTree); //TODO This seems broken in a wierd way. Will need followup
+	_model->setDepartureTree(newTree); //TODO This seems broken in a weird way. Will need followup
 }
 
 void WingEditorDialog::on_noDepartureWarpCheckBox_toggled(bool checked)
