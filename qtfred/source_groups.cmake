@@ -38,6 +38,8 @@ add_file_folder("Source/Mission"
 add_file_folder("Source/Mission/Dialogs"
     src/mission/dialogs/AbstractDialogModel.cpp
     src/mission/dialogs/AbstractDialogModel.h
+	src/mission/dialogs/AboutDialogModel.cpp
+	src/mission/dialogs/AboutDialogModel.h
 	src/mission/dialogs/AsteroidEditorDialogModel.cpp
 	src/mission/dialogs/AsteroidEditorDialogModel.h
 	src/mission/dialogs/BackgroundEditorDialogModel.h
@@ -401,6 +403,7 @@ add_file_folder("Resources/Images"
     resources/images/freddoc.ico
     resources/images/fred.ico
     resources/images/fredknows.png
+	resources/images/fred_about.png
     resources/images/fred_splash.png
     resources/images/green_do.png
 	resources/images/next.png
