@@ -83,9 +83,6 @@ class FredView: public QMainWindow, public IDialogProvider {
 	void on_actionSelectMove_triggered(bool enabled);
 	void on_actionSelectRotate_triggered(bool enabled);
 
-	void on_actionHide_Marked_Objects_triggered(bool enabled);
-	void on_actionShow_All_Hidden_Objects_triggered(bool enabled);
-
 	void on_actionLock_Marked_Objects_triggered(bool enabled);
 	void on_actionUnlock_All_Objects_triggered(bool enabled);
 
@@ -142,9 +139,6 @@ class FredView: public QMainWindow, public IDialogProvider {
 	void on_actionSave_Camera_Pos_triggered(bool);
 	void on_actionRestore_Camera_Pos_triggered(bool);
 
-	void on_actionTool_Bar_triggered(bool enabled);
-	void on_actionStatus_Bar_triggered(bool enabled);
-
 	void on_actionClone_Marked_Objects_triggered(bool);
 	void on_actionDelete_triggered(bool);
 	void on_actionDelete_Wing_triggered(bool);
@@ -156,6 +150,10 @@ class FredView: public QMainWindow, public IDialogProvider {
 	void on_actionNext_Subsystem_triggered(bool);
 	void on_actionPrev_Subsystem_triggered(bool);
 	void on_actionCancel_Subsystem_triggered(bool);
+
+	void on_actionNext_Object_triggered(bool);
+	void on_actionPrev_Object_triggered(bool);
+	void on_actionMark_Wing_triggered(bool);
 
 	void on_actionError_Checker_triggered(bool);
 
