@@ -56,6 +56,7 @@
 
 #include "mission/Editor.h"
 #include "mission/management.h"
+#include <prop/prop.h>
 #include "mission/missionparse.h"
 #include "missioneditor/missionsave.h"
 
@@ -768,6 +769,7 @@ void FredView::connectActionToViewSetting(QAction* option, std::vector<bool>* ve
 
 void FredView::showContextMenu(const QPoint& globalPos) {
 	auto localPos = ui->centralWidget->mapFromGlobal(globalPos);
+	_lastContextMenuLocalPos = localPos;
 
 	auto obj = _viewport->select_object(localPos.x(), localPos.y());
 	if (obj >= 0) {
@@ -778,6 +780,14 @@ void FredView::showContextMenu(const QPoint& globalPos) {
 		if (canAssignLayer) {
 			populateMoveToLayerMenu(obj);
 		}
+
+		// Control Edit Wing / Select Wing visibility and enabled state
+		const bool isShip = (objType == OBJ_SHIP) || (objType == OBJ_START);
+		const bool inWing = isShip && Ships[Objects[obj].instance].wingnum >= 0;
+		_editWingAction->setVisible(isShip);
+		_editWingAction->setEnabled(inWing);
+		_selectWingAction->setVisible(isShip);
+		_selectWingAction->setEnabled(inWing);
 
 		// There is an object under the cursor
 		SCP_string objName;
@@ -792,6 +802,8 @@ void FredView::showContextMenu(const QPoint& globalPos) {
 		_editPopup->exec(globalPos);
 	} else {
 		// Nothing is here...
+		_createPropSubmenu->setEnabled(_viewport->cur_prop_index >= 0);
+		_viewZoomSelectedAction->setEnabled(query_valid_object(fred->currentObject));
 		_viewPopup->exec(globalPos);
 	}
 }
@@ -820,9 +832,58 @@ void FredView::initializePopupMenus() {
 	_viewPopup->addMenu(_controlModeMenu);
 	_viewPopup->addMenu(ui->menuViewpoint);
 	_viewPopup->addSeparator();
+
+	_createSubmenu = new QMenu(tr("Create"), _viewPopup);
+
+	_createShipSubmenu = new QMenu(tr("Ship"), _createSubmenu);
+	_createShipSubmenu->setStyleSheet("QMenu { menu-scrollable: 1; }");
+	connect(_createShipSubmenu, &QMenu::aboutToShow, this, [this]() {
+		if (_createShipSubmenu->actions().isEmpty()) {
+			populateCreateShipSubmenu();
+		}
+	});
+	_createSubmenu->addMenu(_createShipSubmenu);
+
+	_createPropSubmenu = new QMenu(tr("Prop"), _createSubmenu);
+	_createPropSubmenu->setStyleSheet("QMenu { menu-scrollable: 1; }");
+	connect(_createPropSubmenu, &QMenu::aboutToShow, this, [this]() {
+		if (_createPropSubmenu->actions().isEmpty()) {
+			populateCreatePropSubmenu();
+		}
+	});
+	_createSubmenu->addMenu(_createPropSubmenu);
+
+	auto* createWaypointAction = new QAction(tr("Waypoint"), _createSubmenu);
+	connect(createWaypointAction, &QAction::triggered, this, [this]() {
+		int waypoint_instance = -1;
+		if (fred->cur_waypoint != nullptr) {
+			waypoint_instance = Objects[fred->cur_waypoint->get_objnum()].instance;
+		}
+		_viewport->createWaypointAtScreenPos(_lastContextMenuLocalPos.x(), _lastContextMenuLocalPos.y(), waypoint_instance);
+	});
+	_createSubmenu->addAction(createWaypointAction);
+
+	auto* createJumpNodeAction = new QAction(tr("Jump Node"), _createSubmenu);
+	connect(createJumpNodeAction, &QAction::triggered, this, [this]() {
+		_viewport->createJumpNodeAtScreenPos(_lastContextMenuLocalPos.x(), _lastContextMenuLocalPos.y());
+	});
+	_createSubmenu->addAction(createJumpNodeAction);
+
+	_viewPopup->addMenu(_createSubmenu);
+	_viewPopup->addSeparator();
+
 	auto* manageLayersViewAction = new QAction(tr("Manage Layers..."), _viewPopup);
 	connect(manageLayersViewAction, &QAction::triggered, this, [this]() { openLayerManagerDialog(); });
 	_viewPopup->addAction(manageLayersViewAction);
+
+	_viewPopup->addSeparator();
+	_viewZoomSelectedAction = new QAction(tr("Zoom to Selected"), _viewPopup);
+	connect(_viewZoomSelectedAction, &QAction::triggered, this, &FredView::on_actionZoomSelected_triggered);
+	_viewPopup->addAction(_viewZoomSelectedAction);
+
+	auto* viewZoomExtentsAction = new QAction(tr("Zoom Extents"), _viewPopup);
+	connect(viewZoomExtentsAction, &QAction::triggered, this, &FredView::on_actionZoomExtents_triggered);
+	_viewPopup->addAction(viewZoomExtentsAction);
 
 	// Begin construction edit popup
 	_editPopup = new QMenu(this);
@@ -836,10 +897,69 @@ void FredView::initializePopupMenus() {
 	_editPopup->addAction(_editOrientPositionAction);
 
 	_editWingAction = new QAction(tr("Edit Wing"), _editPopup);
+	connect(_editWingAction, &QAction::triggered, this, &FredView::on_actionWings_triggered);
 	_editPopup->addAction(_editWingAction);
+
+	_selectWingAction = new QAction(tr("Select Wing"), _editPopup);
+	connect(_selectWingAction, &QAction::triggered, this, [this]() {
+		int obj = fred->currentObject;
+		if (query_valid_object(obj) && (Objects[obj].type == OBJ_SHIP || Objects[obj].type == OBJ_START)) {
+			int wing = Ships[Objects[obj].instance].wingnum;
+			if (wing >= 0) {
+				fred->mark_wing(wing);
+			}
+		}
+	});
+	_editPopup->addAction(_selectWingAction);
+
 	_editPopup->addSeparator();
 	_moveToLayerMenu = new QMenu(tr("Move to Layer"), _editPopup);
+	_moveToLayerMenu->setStyleSheet("QMenu { menu-scrollable: 1; }");
 	_editPopup->addMenu(_moveToLayerMenu);
+
+	_editPopup->addSeparator();
+	auto* deleteAction = new QAction(tr("Delete"), _editPopup);
+	connect(deleteAction, &QAction::triggered, this, &FredView::on_actionDelete_triggered);
+	_editPopup->addAction(deleteAction);
+
+	auto* cloneAction = new QAction(tr("Clone"), _editPopup);
+	connect(cloneAction, &QAction::triggered, this, &FredView::on_actionClone_Marked_Objects_triggered);
+	_editPopup->addAction(cloneAction);
+
+	_editPopup->addSeparator();
+	auto* editZoomSelectedAction = new QAction(tr("Zoom to Selected"), _editPopup);
+	connect(editZoomSelectedAction, &QAction::triggered, this, &FredView::on_actionZoomSelected_triggered);
+	_editPopup->addAction(editZoomSelectedAction);
+
+	auto* editZoomExtentsAction = new QAction(tr("Zoom Extents"), _editPopup);
+	connect(editZoomExtentsAction, &QAction::triggered, this, &FredView::on_actionZoomExtents_triggered);
+	_editPopup->addAction(editZoomExtentsAction);
+}
+
+void FredView::populateCreateShipSubmenu() {
+	for (int i = 0; i < (int)Ship_info.size(); ++i) {
+		if (Ship_info[i].flags[Ship::Info_Flags::No_fred]) {
+			continue;
+		}
+		auto* action = new QAction(QString::fromUtf8(Ship_info[i].name), _createShipSubmenu);
+		connect(action, &QAction::triggered, this, [this, i]() {
+			_viewport->createShipAtScreenPos(_lastContextMenuLocalPos.x(), _lastContextMenuLocalPos.y(), i);
+		});
+		_createShipSubmenu->addAction(action);
+	}
+}
+
+void FredView::populateCreatePropSubmenu() {
+	for (int i = 0; i < prop_info_size(); ++i) {
+		if (Prop_info[i].flags[Prop::Info_Flags::No_fred]) {
+			continue;
+		}
+		auto* action = new QAction(QString::fromStdString(Prop_info[i].name), _createPropSubmenu);
+		connect(action, &QAction::triggered, this, [this, i]() {
+			_viewport->createPropAtScreenPos(_lastContextMenuLocalPos.x(), _lastContextMenuLocalPos.y(), i);
+		});
+		_createPropSubmenu->addAction(action);
+	}
 }
 
 void FredView::populateMoveToLayerMenu(int targetObject) {

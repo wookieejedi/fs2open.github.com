@@ -1140,25 +1140,37 @@ int EditorViewport::create_object_on_grid(int x, int y, int waypoint_instance) {
 }
 
 int EditorViewport::create_object_on_grid(int x, int y, int waypoint_instance, bool create_prop) {
-	int obj = -1;
-	float rval;
-	vec3d dir, pos;
+	float fallbackDist = 200.0f;
+	if (create_prop) {
+		if (cur_prop_index >= 0 && cur_prop_index < prop_info_size()) {
+			prop_info* pip = &Prop_info[cur_prop_index];
+			if (pip->model_num >= 0) {
+				fallbackDist = model_get_radius(pip->model_num) * 1.5f;
+			} else if (VALID_FNAME(pip->pof_file)) {
+				int modelNum = model_load(pip->pof_file.c_str());
+				if (modelNum >= 0) {
+					fallbackDist = model_get_radius(modelNum) * 1.5f;
+					model_unload(modelNum);
+				}
+			}
+		}
+	} else if (cur_model_index >= 0 && cur_model_index < (int)Ship_info.size() &&
+		cur_model_index != editor->Id_select_type_waypoint &&
+		cur_model_index != editor->Id_select_type_jump_node &&
+		Ship_info[cur_model_index].model_num >= 0) {
+		fallbackDist = model_get_radius(Ship_info[cur_model_index].model_num) * 1.5f;
+	}
 
-	g3_point_to_vec_delayed(&dir, x, y);
-
-	rval = fvi_ray_plane(&pos, &The_grid->center, &The_grid->gmatrix.vec.uvec, &view_pos, &dir, 0.0f);
-
-	if (rval >= 0.0f) {
-		editor->unmark_all();
-		obj = create_object(&pos, waypoint_instance, create_prop);
-		if (obj >= 0) {
-			editor->markObject(obj);
+	vec3d pos = getCreatePosition(x, y, fallbackDist);
+	editor->unmark_all();
+	int obj = create_object(&pos, waypoint_instance, create_prop);
+	if (obj >= 0) {
+		editor->markObject(obj);
 
 			editor->autosave("object create");
 
-		} else if (obj == -1) {
-			dialogProvider->showButtonDialog(DialogType::Error, "Error", "Maximum ship limit reached.  Can't add any more ships.", { DialogButton::Ok });
-		}
+	} else if (obj == -1) {
+		dialogProvider->showButtonDialog(DialogType::Error, "Error", "Maximum ship limit reached.  Can't add any more ships.", { DialogButton::Ok });
 	}
 
 	return obj;
@@ -1205,6 +1217,56 @@ int EditorViewport::create_object(vec3d* pos, int waypoint_instance, bool create
 	needsUpdate();
 	return obj;
 }
+vec3d EditorViewport::getCreatePosition(int x, int y, float fallbackDist) {
+	vec3d dir, pos;
+	g3_point_to_vec_delayed(&dir, x, y);
+	if (fvi_ray_plane(&pos, &The_grid->center, &The_grid->gmatrix.vec.uvec, &view_pos, &dir, 0.0f) >= 0.0f) {
+		return pos;
+	}
+	vm_vec_scale_add(&pos, &view_pos, &view_orient.vec.fvec, fallbackDist);
+	return pos;
+}
+
+int EditorViewport::createShipAtScreenPos(int x, int y, int modelIndex) {
+	if (modelIndex < 0 || modelIndex >= (int)Ship_info.size() ||
+		Ship_info[modelIndex].flags[Ship::Info_Flags::No_fred]) {
+		return -1;
+	}
+	int savedModelIndex = cur_model_index;
+	cur_model_index = modelIndex;
+	int obj = create_object_on_grid(x, y, -1, false);
+	cur_model_index = savedModelIndex;
+	return obj;
+}
+
+int EditorViewport::createPropAtScreenPos(int x, int y, int propIndex) {
+	if (propIndex < 0 || propIndex >= prop_info_size() ||
+		Prop_info[propIndex].flags[Prop::Info_Flags::No_fred]) {
+		return -1;
+	}
+	int savedPropIndex = cur_prop_index;
+	cur_prop_index = propIndex;
+	int obj = create_object_on_grid(x, y, -1, true);
+	cur_prop_index = savedPropIndex;
+	return obj;
+}
+
+int EditorViewport::createWaypointAtScreenPos(int x, int y, int waypoint_instance) {
+	int savedModelIndex = cur_model_index;
+	cur_model_index = editor->Id_select_type_waypoint;
+	int obj = create_object_on_grid(x, y, waypoint_instance, false);
+	cur_model_index = savedModelIndex;
+	return obj;
+}
+
+int EditorViewport::createJumpNodeAtScreenPos(int x, int y) {
+	int savedModelIndex = cur_model_index;
+	cur_model_index = editor->Id_select_type_jump_node;
+	int obj = create_object_on_grid(x, y, -1, false);
+	cur_model_index = savedModelIndex;
+	return obj;
+}
+
 void EditorViewport::initialSetup() {
 	cur_model_index = get_default_player_ship_index();
 	for (int i = 0; i < prop_info_size(); ++i) {
