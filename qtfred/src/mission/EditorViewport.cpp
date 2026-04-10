@@ -12,6 +12,7 @@
 
 #include "EditorViewport.h"
 #include <QSettings>
+#include "ui/dialogs/BriefingEditorDialog.h"
 #include <math/fvi.h>
 #include <jumpnode/jumpnode.h>
 #include <mission/missionparse.h>
@@ -318,6 +319,9 @@ void EditorViewport::move_mouse(int btn, int mdx, int mdy) {
 ///////////////////////////////////////////////////
 void EditorViewport::process_system_keys() {
 	auto& bindings = ControlBindings::instance();
+	if (dialogs::BriefingEditorDialog::isAnyDialogOpen()) {
+		return;
+	}
 	if (bindings.takeTriggered(ControlAction::ToggleSelectionLock)) {
 		Selection_lock = !Selection_lock;
 	}
@@ -326,6 +330,9 @@ void EditorViewport::process_system_keys() {
 
 void EditorViewport::process_controls(vec3d* pos, matrix* orient, float frametime, int mode) {
 	static std::unique_ptr<io::spacemouse::SpaceMouse> spacemouse = io::spacemouse::SpaceMouse::searchSpaceMice(0);
+	if (dialogs::BriefingEditorDialog::isAnyDialogOpen()) {
+		return;
+	}
 
 	if (Flying_controls_mode) {
 		memset(&view_controls, 0, sizeof(control_info));
@@ -809,6 +816,13 @@ int EditorViewport::select_object(int cx, int cy) {
 	/*	gr_reset_clip();
 	g3_start_frame(0); ////////////////
 	g3_set_view_matrix(&eye_pos, &eye_orient, 0.5f);*/
+
+	// Mouse events can arrive when no frame is active (G3_count == 0) or when
+	// another renderer, such as the briefing map widget, has altered the frame state
+	// In those cases we cannot do a valid screen to world conversion
+	if (g3_in_frame() != 1) {
+		return -1;
+	}
 
 	//	Get 3d vector specified by mouse cursor location.
 	g3_point_to_vec(&v, cx, cy);
