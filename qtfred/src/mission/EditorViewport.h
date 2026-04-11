@@ -7,8 +7,14 @@
 
 #include <object/object.h>
 
-namespace fso {
-namespace fred {
+namespace fso::fred {
+
+struct Marking_box {
+	int x1 = 0;
+	int y1 = 0;
+	int x2 = 0;
+	int y2 = 0;
+};
 
 struct ViewSettings {
 	bool Universal_heading = false;
@@ -182,8 +188,6 @@ class EditorViewport {
 	int cur_model_index = 0;
 	int cur_prop_index = -1;
 
-	bool Bg_bitmap_dialog = false;
-
 	object_orient_pos rotation_backup[MAX_OBJECTS];
 
 	vec3d saved_cam_pos = vmd_zero_vector;
@@ -220,5 +224,4 @@ private:
 	void loadSettings();
 };
 
-}
-}
+} // namespace fso::fred
