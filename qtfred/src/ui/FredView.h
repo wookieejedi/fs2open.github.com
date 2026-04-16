@@ -29,6 +29,8 @@ class WingEditorDialog;
 class PropEditorDialog;
 }
 
+class SceneBrowserPanel;
+
 namespace Ui {
 class FredView;
 }
@@ -47,6 +49,9 @@ class FredView: public QMainWindow, public IDialogProvider {
 	RenderWidget* getRenderWidget();
 
 	void showContextMenu(const QPoint& globalPos);
+	void showContextMenu(int objNum, const QPoint& globalPos);
+	void showWingContextMenu(int wingIndex, const QPoint& globalPos);
+	void showWaypointPathContextMenu(int pathIndex, const QPoint& globalPos);
 
  public slots:
 	void openLoadMissionDialog();
@@ -216,17 +221,20 @@ class FredView: public QMainWindow, public IDialogProvider {
 
 	void initializeStatusBar();
 	void initializePopupMenus();
-	void populateMoveToLayerMenu(int targetObject);
+	void populateMoveToLayerMenu(int targetObject, QMenu* targetMenu = nullptr);
 	void populateCreateShipSubmenu();
 	void populateCreatePropSubmenu();
 	void openLayerManagerDialog();
 	void ensureViewportFocus();
+	void enforceSideDockAreas();
 
 	void onGroupSelected(int group);
 	void onSetGroup(int group);
 
 	QLabel* _statusBarViewmode = nullptr;
 	QLabel* _statusBarUnitsLabel = nullptr;
+
+	SceneBrowserPanel* _browserPanel = nullptr;
 
 	QMenu* _viewPopup = nullptr;
 	QMenu* _createSubmenu = nullptr;

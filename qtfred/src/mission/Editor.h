@@ -114,6 +114,12 @@ class Editor : public QObject {
 	/*! Update the game but doesn't render anything. */
 	void update();
 
+	/*! Emit layerVisibilityChanged — called by EditorViewport after toggling a layer. */
+	void notifyLayerVisibilityChanged() { layerVisibilityChanged(); }
+
+	/*! Emit layerStructureChanged — called by EditorViewport when layers are added/removed or objects move between layers. */
+	void notifyLayerStructureChanged() { layerStructureChanged(); }
+
   signals:
 	/**
 	 * @brief Signal for when a new mission has been loaded
@@ -138,6 +144,16 @@ class Editor : public QObject {
 	 * @param marked @c true if the object is now marked, @c false otherwise
 	 */
 	void objectMarkingChanged(int obj, bool marked);
+
+	/**
+	 * @brief A signal emitted when a layer's visibility has been toggled
+	 */
+	void layerVisibilityChanged();
+
+	/**
+	 * @brief A signal emitted when the layer list changes (add/remove) or an object moves between layers
+	 */
+	void layerStructureChanged();
 
   public:
 	// --- Undo / autosave state ---

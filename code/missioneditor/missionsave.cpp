@@ -4099,7 +4099,7 @@ int Fred_mission_save::save_objects()
 
 		if (save_config.save_format != MissionFormat::RETAIL &&
 			!shipp->fred_layer.empty() &&
-			stricmp(shipp->fred_layer.c_str(), "Default") != 0) {
+			!lcase_equal(shipp->fred_layer, "Default")) {
 			if (optional_string_fred("+Layer:", "$Name:"))
 				parse_comments();
 			else
@@ -4855,6 +4855,15 @@ int Fred_mission_save::save_waypoints()
 				else
 					fout(" %s", "false");
 			}
+
+			const SCP_string& jn_layer = jnp->GetFredLayer();
+			if (!jn_layer.empty() && !lcase_equal(jn_layer, "Default")) {
+				if (optional_string_fred("+Layer:", "$Jump Node:"))
+					parse_comments();
+				else
+					fout("\n+Layer:");
+				fout(" %s", jn_layer.c_str());
+			}
 		}
 
 		fso_comment_pop();
@@ -4885,6 +4894,15 @@ int Fred_mission_save::save_waypoints()
 					fout("\n+Color:");
 				}
 				fout(" %d %d %d", ii.get_color_r(), ii.get_color_g(), ii.get_color_b());
+			}
+
+			const SCP_string& wpt_layer = ii.get_fred_layer();
+			if (!wpt_layer.empty() && !lcase_equal(wpt_layer, "Default")) {
+				if (optional_string_fred("+Layer:", "$List:"))
+					parse_comments();
+				else
+					fout("\n+Layer:");
+				fout(" %s", wpt_layer.c_str());
 			}
 		}
 
@@ -5233,7 +5251,7 @@ int Fred_mission_save::save_props()
 
 				if (save_config.save_format != MissionFormat::RETAIL &&
 					!p->fred_layer.empty() &&
-					stricmp(p->fred_layer.c_str(), "Default") != 0) {
+					!lcase_equal(p->fred_layer, "Default")) {
 					if (optional_string_fred("+Layer:", "$Name:"))
 						parse_comments();
 					else

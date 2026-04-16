@@ -10,6 +10,7 @@
 #include <QDebug>
 #include <QKeyEvent>
 #include <QProcess>
+#include <QSignalBlocker>
 #include <QSettings>
 
 #include <project.h>
@@ -19,12 +20,14 @@
 #include <ui/dialogs/ShipEditor/ShipEditorDialog.h>
 #include <ui/dialogs/WingEditorDialog.h>
 #include <ui/dialogs/PropEditorDialog.h>
+#include <ui/panels/SceneBrowserPanel.h>
 #include <ui/dialogs/MissionEventsDialog.h>
 #include <mission/dialogs/MissionEventsDialogModel.h>
 #include <ui/dialogs/AsteroidEditorDialog.h>
 #include <ui/dialogs/VolumetricNebulaDialog.h>
 #include <ui/dialogs/BriefingEditorDialog.h>
 #include <ui/dialogs/WaypointEditorDialog.h>
+#include <object/waypoint.h>
 #include <ui/dialogs/WaypointPathGeneratorDialog.h>
 #include <ui/dialogs/JumpNodeEditorDialog.h>
 #include <ui/dialogs/CampaignEditorDialog.h>
@@ -40,7 +43,6 @@
 #include <ui/dialogs/GlobalShipFlagsDialog.h>
 #include <ui/dialogs/VoiceActingManager.h>
 #include <globalincs/linklist.h>
-#include <ui/dialogs/SelectionDialog.h>
 #include <ui/dialogs/FictionViewerDialog.h>
 #include <ui/dialogs/CommandBriefingDialog.h>
 #include <ui/dialogs/DebriefingDialog.h>
@@ -88,6 +90,7 @@ namespace fred {
 
 FredView::FredView(QWidget* parent) : QMainWindow(parent), ui(new Ui::FredView()) {
 	ui->setupUi(this);
+	enforceSideDockAreas();
 
 	setFocusPolicy(Qt::NoFocus);
 	setFocusProxy(ui->centralWidget);
@@ -226,6 +229,27 @@ void FredView::setEditor(Editor* editor, EditorViewport* viewport) {
 	connect(this, &FredView::viewIdle, this, [this]() { ui->actionUndo->setEnabled(fred->undoAvailable != 0); });
 	connect(this, &FredView::viewIdle, this, [this]() { ui->actionDisable_Undo->setChecked(fred->autosaveDisabled != 0); });
 
+	// Scene Browser dock panel
+	_browserPanel = new SceneBrowserPanel(this, _viewport);
+	addDockWidget(Qt::LeftDockWidgetArea, _browserPanel);
+	enforceSideDockAreas();
+
+	// Reuse the existing toolbar/menu Selection List action as a Scene Browser toggle
+	ui->actionSelectionList->setCheckable(true);
+	ui->actionSelectionList->setText(tr("Scene Browser"));
+	ui->actionSelectionList->setToolTip(tr("Toggle Scene Browser (H)"));
+	ui->actionSelectionList->setChecked(_browserPanel->isVisible());
+	connect(_browserPanel, &QDockWidget::visibilityChanged, this, [this](bool visible) {
+		QSignalBlocker blocker(ui->actionSelectionList);
+		ui->actionSelectionList->setChecked(visible);
+	});
+
+	// Restore dock layout from last session
+	QSettings settings;
+	const auto savedState = settings.value("FredView/mainWindowState").toByteArray();
+	if (!savedState.isEmpty())
+		restoreState(savedState);
+	enforceSideDockAreas();
 }
 
 void FredView::loadMissionFile(const QString& pathName, int flags) {
@@ -602,6 +626,12 @@ void FredView::on_mission_loaded(const std::string& filepath) {
 	}
 
 	_missionModified = false;
+
+	if (filepath.empty()) {
+		statusBar()->showMessage(tr("Every great mission starts here. No pressure."));
+	} else {
+		statusBar()->clearMessage();
+	}
 }
 
 QSurface* FredView::getRenderSurface() {
@@ -713,8 +743,6 @@ void FredView::initializeStatusBar() {
 
 	_statusBarUnitsLabel = new QLabel();
 	statusBar()->addPermanentWidget(_statusBarUnitsLabel);
-
-	statusBar()->showMessage(tr("Every great mission starts here. No pressure."));
 }
 void FredView::updateUI() {
 	if (!_viewport) {
@@ -745,12 +773,36 @@ void FredView::ensureViewportFocus() {
 		if (focusedWindow != nullptr && focusedWindow != this) {
 			return;
 		}
+
+		// Don't steal focus from dock widget children — the user is intentionally
+		// interacting with a panel (search bar, buttons, checkboxes, etc.).
+		QWidget* w = focusedWidget;
+		while (w != nullptr) {
+			if (qobject_cast<QDockWidget*>(w) != nullptr) {
+				return;
+			}
+			w = w->parentWidget();
+		}
 	}
 
 	if (focusedWidget != ui->centralWidget) {
 		ui->centralWidget->setFocus(Qt::OtherFocusReason);
 	}
 }
+
+void FredView::enforceSideDockAreas()
+{
+	const auto allowedAreas = Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea;
+	for (auto* dock : findChildren<QDockWidget*>()) {
+		dock->setAllowedAreas(allowedAreas);
+
+		const auto area = dockWidgetArea(dock);
+		if (area == Qt::TopDockWidgetArea || area == Qt::BottomDockWidgetArea || area == Qt::NoDockWidgetArea) {
+			addDockWidget(Qt::LeftDockWidgetArea, dock);
+		}
+	}
+}
+
 bool FredView::isMissionModified() const {
 	return _missionModified;
 }
@@ -816,6 +868,37 @@ void FredView::connectActionToViewSetting(QAction* option, std::vector<bool>* ve
 		});
 }
 
+static bool canObjectBeAssignedLayer(int objType) {
+	return (objType == OBJ_SHIP) || (objType == OBJ_START) || (objType == OBJ_PROP) ||
+	       (objType == OBJ_JUMP_NODE) || (objType == OBJ_WAYPOINT);
+}
+
+void FredView::showContextMenu(int objNum, const QPoint& globalPos) {
+	if (!query_valid_object(objNum)) return;
+	fred->selectObject(objNum);
+	const auto objType = Objects[objNum].type;
+	const bool canAssignLayer = canObjectBeAssignedLayer(objType);
+	_moveToLayerMenu->menuAction()->setVisible(canAssignLayer);
+	if (canAssignLayer)
+		populateMoveToLayerMenu(objNum);
+
+	const bool isShip = (objType == OBJ_SHIP) || (objType == OBJ_START);
+	const bool inWing = isShip && Ships[Objects[objNum].instance].wingnum >= 0;
+	_editWingAction->setVisible(isShip);
+	_editWingAction->setEnabled(inWing);
+	_selectWingAction->setVisible(isShip);
+	_selectWingAction->setEnabled(inWing);
+
+	SCP_string objName;
+	if (fred->getNumMarked() > 1) {
+		objName = "Marked Objects";
+	} else {
+		objName = object_name(objNum);
+	}
+	_editObjectAction->setText(tr("Edit %1").arg(objName.c_str()));
+	_editPopup->exec(globalPos);
+}
+
 void FredView::showContextMenu(const QPoint& globalPos) {
 	auto localPos = ui->centralWidget->mapFromGlobal(globalPos);
 	_lastContextMenuLocalPos = localPos;
@@ -824,7 +907,7 @@ void FredView::showContextMenu(const QPoint& globalPos) {
 	if (obj >= 0) {
 		fred->selectObject(obj);
 		const auto objType = Objects[obj].type;
-		const bool canAssignLayer = (objType == OBJ_SHIP) || (objType == OBJ_START) || (objType == OBJ_PROP);
+		const bool canAssignLayer = canObjectBeAssignedLayer(objType);
 		_moveToLayerMenu->menuAction()->setVisible(canAssignLayer);
 		if (canAssignLayer) {
 			populateMoveToLayerMenu(obj);
@@ -856,6 +939,112 @@ void FredView::showContextMenu(const QPoint& globalPos) {
 		_viewPopup->exec(globalPos);
 	}
 }
+void FredView::showWingContextMenu(int wingIndex, const QPoint& globalPos)
+{
+	if (wingIndex < 0 || wingIndex >= MAX_WINGS) return;
+
+	// Find first valid wing member for layer population and current-object
+	int firstObjNum = -1;
+	fred->unmark_all();
+	for (int si = 0; si < Wings[wingIndex].wave_count; si++) {
+		int shipIdx = Wings[wingIndex].ship_index[si];
+		if (shipIdx < 0) continue;
+		int objNum = Ships[shipIdx].objnum;
+		if (objNum >= 0 && Objects[objNum].type != OBJ_NONE) {
+			fred->markObject(objNum);
+			if (firstObjNum < 0)
+				firstObjNum = objNum;
+		}
+	}
+	if (firstObjNum >= 0)
+		fred->selectObject(firstObjNum);
+
+	QString wingName = QString::fromUtf8(Wings[wingIndex].name);
+
+	QMenu menu;
+
+	auto* editAction = menu.addAction(tr("Edit %1").arg(wingName));
+	connect(editAction, &QAction::triggered, this, &FredView::on_actionWings_triggered);
+
+	menu.addSeparator();
+
+	auto* localLayerMenu = new QMenu(tr("Move to Layer"), &menu);
+	if (firstObjNum >= 0)
+		populateMoveToLayerMenu(firstObjNum, localLayerMenu);
+	menu.addMenu(localLayerMenu);
+
+	menu.addSeparator();
+
+	auto* zoomSelAction = menu.addAction(tr("Zoom to Selected"));
+	connect(zoomSelAction, &QAction::triggered, this, &FredView::on_actionZoomSelected_triggered);
+
+	auto* zoomExtAction = menu.addAction(tr("Zoom Extents"));
+	connect(zoomExtAction, &QAction::triggered, this, &FredView::on_actionZoomExtents_triggered);
+
+	menu.addSeparator();
+
+	auto* deleteAction = menu.addAction(tr("Delete %1").arg(wingName));
+	connect(deleteAction, &QAction::triggered, this, [this, wingIndex]() {
+		fred->delete_wing(wingIndex, 0);
+		fred->autosave("wing delete");
+	});
+
+	menu.exec(globalPos);
+}
+
+void FredView::showWaypointPathContextMenu(int pathIndex, const QPoint& globalPos)
+{
+	if (!SCP_vector_inbounds(Waypoint_lists, pathIndex)) return;
+	auto& wl = Waypoint_lists[pathIndex];
+	if (wl.get_waypoints().empty()) return;
+
+	// Select all waypoints in the path
+	int firstObjNum = -1;
+	fred->unmark_all();
+	for (const auto& wp : wl.get_waypoints()) {
+		int objNum = wp.get_objnum();
+		if (objNum >= 0 && Objects[objNum].type != OBJ_NONE) {
+			fred->markObject(objNum);
+			if (firstObjNum < 0)
+				firstObjNum = objNum;
+		}
+	}
+	if (firstObjNum >= 0)
+		fred->selectObject(firstObjNum);
+
+	QString pathName = QString::fromUtf8(wl.get_name());
+
+	QMenu menu;
+
+	auto* editAction = menu.addAction(tr("Edit %1").arg(pathName));
+	connect(editAction, &QAction::triggered, this, &FredView::on_actionWaypoint_Paths_triggered);
+
+	menu.addSeparator();
+
+	auto* localLayerMenu = new QMenu(tr("Move to Layer"), &menu);
+	if (firstObjNum >= 0)
+		populateMoveToLayerMenu(firstObjNum, localLayerMenu);
+	menu.addMenu(localLayerMenu);
+
+	menu.addSeparator();
+
+	auto* zoomSelAction = menu.addAction(tr("Zoom to Selected"));
+	connect(zoomSelAction, &QAction::triggered, this, &FredView::on_actionZoomSelected_triggered);
+
+	auto* zoomExtAction = menu.addAction(tr("Zoom Extents"));
+	connect(zoomExtAction, &QAction::triggered, this, &FredView::on_actionZoomExtents_triggered);
+
+	menu.addSeparator();
+
+	auto* deleteAction = menu.addAction(tr("Delete %1").arg(pathName));
+	connect(deleteAction, &QAction::triggered, this, [this]() {
+		fred->delete_marked();
+		fred->autosave("waypoint path delete");
+	});
+
+	menu.exec(globalPos);
+}
+
 void FredView::initializePopupMenus() {
 	_viewPopup = new QMenu(this);
 
@@ -1011,15 +1200,16 @@ void FredView::populateCreatePropSubmenu() {
 	}
 }
 
-void FredView::populateMoveToLayerMenu(int targetObject) {
-	_moveToLayerMenu->clear();
+void FredView::populateMoveToLayerMenu(int targetObject, QMenu* targetMenu) {
+	QMenu* dest = targetMenu ? targetMenu : _moveToLayerMenu;
+	dest->clear();
 
 	const auto layerNames = _viewport->getLayerNames();
 	for (const auto& layerName : layerNames) {
 		bool visible = true;
 		_viewport->getLayerVisibility(layerName, &visible);
 
-		auto* layerAction = new QAction(QString::fromStdString(layerName), _moveToLayerMenu);
+		auto* layerAction = new QAction(QString::fromStdString(layerName), dest);
 		layerAction->setCheckable(true);
 		layerAction->setChecked(_viewport->getObjectLayerName(targetObject) == layerName);
 		layerAction->setEnabled(visible);
@@ -1036,11 +1226,11 @@ void FredView::populateMoveToLayerMenu(int targetObject) {
 					showButtonDialog(DialogType::Error, "Layer Error", error, { DialogButton::Ok });
 				}
 			});
-		_moveToLayerMenu->addAction(layerAction);
+		dest->addAction(layerAction);
 	}
 
-	_moveToLayerMenu->addSeparator();
-	auto* manageAction = _moveToLayerMenu->addAction(tr("Manage Layers..."));
+	dest->addSeparator();
+	auto* manageAction = dest->addAction(tr("Manage Layers..."));
 	connect(manageAction, &QAction::triggered, this, [this]() { openLayerManagerDialog(); });
 }
 
@@ -1159,6 +1349,9 @@ void FredView::changeEvent(QEvent* event) {
 	}
 }
 void FredView::closeEvent(QCloseEvent* event) {
+	QSettings settings;
+	settings.setValue("FredView/mainWindowState", saveState());
+
 	if (!maybePromptToSaveMissionChanges(tr("closing QtFRED"))) {
 		event->ignore();
 		return;
@@ -1726,11 +1919,10 @@ bool FredView::showModalDialog(IBaseDialog* dlg) {
 
 	return ret == QDialog::Accepted;
 }
-void FredView::on_actionSelectionList_triggered(bool) {
-	auto dialog = new dialogs::SelectionDialog(this, _viewport);
-	// This is a modal dialog
-	dialog->setAttribute(Qt::WA_DeleteOnClose);
-	dialog->exec();
+void FredView::on_actionSelectionList_triggered(bool checked) {
+	if (_browserPanel != nullptr) {
+		_browserPanel->setVisible(checked);
+	}
 }
 void FredView::on_actionOrbitSelected_triggered(bool enabled) {
 	_viewport->Lookat_mode = enabled;

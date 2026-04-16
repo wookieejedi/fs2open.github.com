@@ -902,6 +902,20 @@ void EditorViewport::setObjectLayerByIndex(int objectIndex, size_t layerIndex) {
 		if (prop != nullptr) {
 			prop->fred_layer = layerName;
 		}
+	} else if (Objects[objectIndex].type == OBJ_JUMP_NODE) {
+		auto* jn = jumpnode_get_by_objnum(objectIndex);
+		if (jn != nullptr) {
+			jn->SetFredLayer(layerName);
+		}
+	} else if (Objects[objectIndex].type == OBJ_WAYPOINT) {
+		// Layer is tracked at the path level; sync all waypoints in the path to the same layer
+		auto* wl = find_waypoint_list_with_instance(Objects[objectIndex].instance, nullptr);
+		if (wl != nullptr) {
+			wl->set_fred_layer(layerName);
+			for (const auto& wpt : wl->get_waypoints()) {
+				_objectLayers[wpt.get_objnum()] = layerIndex;
+			}
+		}
 	}
 }
 
@@ -926,6 +940,7 @@ bool EditorViewport::addLayer(const SCP_string& name, SCP_string* errorMessage) 
 	_layerNames.push_back(name);
 	_layerVisibility.push_back(true);
 	syncMissionLayerNames();
+	editor->notifyLayerStructureChanged();
 	return true;
 }
 
@@ -947,14 +962,19 @@ bool EditorViewport::deleteLayer(const SCP_string& name, SCP_string* errorMessag
 	_layerNames.erase(_layerNames.begin() + static_cast<SCP_vector<SCP_string>::difference_type>(layerIndex));
 	_layerVisibility.erase(_layerVisibility.begin() + static_cast<SCP_vector<bool>::difference_type>(layerIndex));
 
+	std::vector<int> toReassign;
 	for (auto& objectLayer : _objectLayers) {
 		if (objectLayer.second == layerIndex) {
-			setObjectLayerByIndex(objectLayer.first, 0);
+			toReassign.push_back(objectLayer.first);
 		} else if (objectLayer.second > layerIndex) {
 			--objectLayer.second;
 		}
 	}
+	for (int objIdx : toReassign) {
+		setObjectLayerByIndex(objIdx, 0);
+	}
 	syncMissionLayerNames();
+	editor->notifyLayerStructureChanged();
 	return true;
 }
 
@@ -977,6 +997,7 @@ bool EditorViewport::setLayerVisibility(const SCP_string& name, bool visible, SC
 	}
 
 	needsUpdate();
+	editor->notifyLayerVisibilityChanged();
 	return true;
 }
 
@@ -1038,6 +1059,18 @@ void EditorViewport::reloadLayersFromMission() {
 				const auto found = getLayerIndex(prop->fred_layer);
 				layerIndex = found == static_cast<size_t>(-1) ? 0 : found;
 			}
+		} else if (objp->type == OBJ_JUMP_NODE) {
+			auto* jn = jumpnode_get_by_objnum(objectIndex);
+			if (jn != nullptr) {
+				const auto found = getLayerIndex(jn->GetFredLayer());
+				layerIndex = found == static_cast<size_t>(-1) ? 0 : found;
+			}
+		} else if (objp->type == OBJ_WAYPOINT) {
+			auto* wl = find_waypoint_list_with_instance(objp->instance, nullptr);
+			if (wl != nullptr) {
+				const auto found = getLayerIndex(wl->get_fred_layer());
+				layerIndex = found == static_cast<size_t>(-1) ? 0 : found;
+			}
 		}
 
 		setObjectLayerByIndex(objectIndex, layerIndex);
@@ -1068,6 +1101,7 @@ bool EditorViewport::moveObjectToLayer(int objectIndex, const SCP_string& layerN
 		editor->unmarkObject(objectIndex);
 	}
 	needsUpdate();
+	editor->notifyLayerStructureChanged();
 	return true;
 }
 
@@ -1089,6 +1123,7 @@ void EditorViewport::moveMarkedObjectsToLayer(const SCP_string& layerName, SCP_s
 		}
 	}
 	needsUpdate();
+	editor->notifyLayerStructureChanged();
 }
 
 bool EditorViewport::isObjectVisibleInLayer(const object* objp) const {
@@ -1150,7 +1185,8 @@ int EditorViewport::create_object_on_grid(int x, int y, int waypoint_instance, b
 	if (obj >= 0) {
 		editor->markObject(obj);
 
-			editor->autosave("object create");
+		editor->missionChanged();
+		editor->autosave("object create");
 
 	} else if (obj == -1) {
 		dialogProvider->showButtonDialog(DialogType::Error, "Error", "Maximum ship limit reached.  Can't add any more ships.", { DialogButton::Ok });
