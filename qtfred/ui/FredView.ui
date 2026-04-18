@@ -20,7 +20,7 @@
      <x>0</x>
      <y>0</y>
      <width>926</width>
-     <height>26</height>
+     <height>22</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuFile">
@@ -194,9 +194,10 @@
     </property>
     <addaction name="actionShips"/>
     <addaction name="actionWings"/>
-    <addaction name="actionObjects"/>
+    <addaction name="actionProps"/>
     <addaction name="actionWaypoint_Paths"/>
     <addaction name="actionJump_Nodes"/>
+    <addaction name="actionObject_Orientation"/>
     <addaction name="separator"/>
     <addaction name="actionControl_Object"/>
     <addaction name="actionNext_Object"/>
@@ -609,7 +610,7 @@
     <string>&amp;FS1 Mission</string>
    </property>
   </action>
-<action name="actionRun_FreeSpace_2_Open">
+  <action name="actionRun_FreeSpace_2_Open">
    <property name="text">
     <string>Run &amp;FreeSpace</string>
    </property>
@@ -1022,12 +1023,17 @@
     <string>Shift+W</string>
    </property>
   </action>
-  <action name="actionObjects">
+  <action name="actionObject_Orientation">
    <property name="text">
-    <string>&amp;Objects</string>
+    <string>Object &amp;Orientation</string>
    </property>
    <property name="shortcut">
     <string>Shift+O</string>
+   </property>
+  </action>
+  <action name="actionProps">
+   <property name="text">
+    <string>Props</string>
    </property>
   </action>
   <action name="actionWaypoint_Paths">
