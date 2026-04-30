@@ -6392,7 +6392,11 @@ void parse_asteroid_fields(mission *pm)
 				if (optional_string("+Field Debris Type:")) {
 					int subtype;
 					stuff_int(&subtype);
-					Asteroid_field.field_asteroid_type.push_back(colors[subtype]);
+					if (subtype >= 0 && subtype < NUM_ASTEROID_SIZES) {
+						Asteroid_field.field_asteroid_type.push_back(colors[subtype]);
+					} else {
+						WarningEx(LOCATION, "Invalid +Field Debris Type value %d in asteroid field (must be 0-%d); ignoring.", subtype, NUM_ASTEROID_SIZES - 1);
+					}
 				}
 			}
 
