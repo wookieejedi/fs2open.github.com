@@ -196,7 +196,7 @@ void model_free(polymodel* pm)
 
 			if (pm->submodel[i].collision_tree_index >= 0) {
 				model_remove_bsp_collision_tree(pm->submodel[i].collision_tree_index);
-				pm->submodel[i].collision_tree_index = 0;
+				pm->submodel[i].collision_tree_index = -1;
 			}
 		}
 	}
