@@ -5347,6 +5347,7 @@ void resolve_path_masks(bool path_user_is_ship, const char *path_user, anchor_t 
 		// Load the anchor ship model with subsystems and all; it'll need to be done for this mission anyway
 		auto anchor_sip = anchor_ship_entry->sip();
 		modelnum = model_load(anchor_sip->pof_file, anchor_sip);
+		anchor_sip->model_num = modelnum;
 
 		// resolve names to indexes
 		*path_mask = 0;
@@ -7075,6 +7076,7 @@ bool post_process_mission(mission *pm)
 				if (valid) {
 					ship_info* sip = &Ship_info[icon.ship_class];
 					stage.icons[j].modelnum = model_load(sip->pof_file, sip);
+					sip->model_num = stage.icons[j].modelnum;
 				}
 			}
 		}
@@ -8944,6 +8946,7 @@ void check_anchor_for_hangar_bay(SCP_string &message, SCP_set<anchor_t> &anchors
 		// Load the anchor ship model with subsystems and all; it'll need to be done for this mission anyway
 		auto anchor_sip = anchor_ship_entry->sip();
 		int modelnum = model_load(anchor_sip->pof_file, anchor_sip);
+		anchor_sip->model_num = modelnum;
 
 		// Check if this model has a hangar bay
 		if (!model_has_hangar_bay(modelnum))

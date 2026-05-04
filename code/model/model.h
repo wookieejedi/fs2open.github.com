@@ -1005,9 +1005,11 @@ void model_free_all();
 void model_instance_free_all();
 
 // Alias to model_load, checks if a pof tech model exists and loads it if specified, otherwise loads the default pof. --wookieejedi
+// NOTE: Each time model_load is called with a ship_info pointer, which causes it to load subsystems, the model number MUST be assigned to the ship_info.
 int model_load(ship_info* sip, bool prefer_tech_model);
 
 // Loads a model from disk and returns the model number it loaded into.
+// NOTE: Each time model_load is called with a ship_info pointer, which causes it to load subsystems, the model number MUST be assigned to the ship_info.
 int model_load(const char *filename, ship_info* sip = nullptr, ErrorType error_type = ErrorType::FATAL_ERROR, bool allow_redundant_load = false);
 
 int model_create_instance(int objnum, int model_num);
