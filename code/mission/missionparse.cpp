@@ -5337,7 +5337,7 @@ void resolve_path_masks(bool path_user_is_ship, const char *path_user, anchor_t 
 	// uninitialized; compute the mask from scratch
 	if (prp->cached_mask & (1 << MAX_SHIP_BAY_PATHS))
 	{
-		int j, bay_path, modelnum;
+		int j, bay_path;
 
 		// get anchor ship
 		Assertion(anchor.isValid() && !(anchor.value() & ANCHOR_SPECIAL_ARRIVAL), "%s %s anchor %d is invalid or is a special arrival.  Get a coder!", path_user_is_ship ? "Ship" : "Wing", path_user, anchor.value());
@@ -5346,14 +5346,13 @@ void resolve_path_masks(bool path_user_is_ship, const char *path_user, anchor_t 
 
 		// Load the anchor ship model with subsystems and all; it'll need to be done for this mission anyway
 		auto anchor_sip = anchor_ship_entry->sip();
-		modelnum = model_load(anchor_sip->pof_file, anchor_sip);
-		anchor_sip->model_num = modelnum;
+		anchor_sip->model_num = model_load(anchor_sip->pof_file, anchor_sip);
 
 		// resolve names to indexes
 		*path_mask = 0;
 		for	(j = 0; j < prp->num_paths; j++)
 		{
-			bay_path = model_find_bay_path(modelnum, prp->path_names[j]);
+			bay_path = model_find_bay_path(anchor_sip->model_num, prp->path_names[j]);
 			if (bay_path < 0)
 				continue;
 
@@ -7075,8 +7074,9 @@ bool post_process_mission(mission *pm)
 
 				if (valid) {
 					ship_info* sip = &Ship_info[icon.ship_class];
-					stage.icons[j].modelnum = model_load(sip->pof_file, sip);
-					sip->model_num = stage.icons[j].modelnum;
+					int modelnum = model_load(sip->pof_file, sip);
+					stage.icons[j].modelnum = modelnum;
+					sip->model_num = modelnum;
 				}
 			}
 		}
@@ -8945,11 +8945,10 @@ void check_anchor_for_hangar_bay(SCP_string &message, SCP_set<anchor_t> &anchors
 	{
 		// Load the anchor ship model with subsystems and all; it'll need to be done for this mission anyway
 		auto anchor_sip = anchor_ship_entry->sip();
-		int modelnum = model_load(anchor_sip->pof_file, anchor_sip);
-		anchor_sip->model_num = modelnum;
+		anchor_sip->model_num = model_load(anchor_sip->pof_file, anchor_sip);
 
 		// Check if this model has a hangar bay
-		if (!model_has_hangar_bay(modelnum))
+		if (!model_has_hangar_bay(anchor_sip->model_num))
 		{
 			sprintf(message, "%s (%s) is used as a%s anchor by %s %s (and possibly elsewhere too), but it does not have a hangar bay!", anchor_ship_entry->name,
 				anchor_sip->name, is_arrival ? "n arrival" : " departure", other_is_ship ? "ship" : "wing", other_name);
