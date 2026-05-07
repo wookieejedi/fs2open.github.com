@@ -74,9 +74,9 @@ endif()
 IF(MSVC_USE_RUNTIME_DLL OR FSO_BUILD_QTFRED)
 	set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<NOT:$<CONFIG:Release>>:Debug>DLL")
 	add_compile_definitions(_AFXDLL)
-ELSE(MSVC_USE_RUNTIME_DLL)
+ELSE()
 	set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<NOT:$<CONFIG:Release>>:Debug>")
-ENDIF(MSVC_USE_RUNTIME_DLL)
+ENDIF()
 
 # Debug
 set(CMAKE_C_FLAGS_DEBUG "/W4 /Gy /Zi /Od /RTC1 /Gd /Oy-")
