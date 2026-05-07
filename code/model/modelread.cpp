@@ -3690,7 +3690,7 @@ void model_set_bay_path_nums(polymodel *pm)
 	*/
 
 	// malloc out storage for the path information
-	pm->ship_bay = make_shared<ship_bay_t>();
+	pm->ship_bay = std::make_shared<ship_bay_t>();
 
 	pm->ship_bay->num_paths = 0;
 	// TODO: determine if zeroing out here is affecting any earlier initializations
@@ -5339,7 +5339,7 @@ int model_create_bsp_collision_tree()
 	bsp_collision_tree tree{};
 
 	tree.used = true;
-	Bsp_collision_tree_list.push_back(tree);
+	Bsp_collision_tree_list.push_back(std::move(tree));
 
 	return (int)(Bsp_collision_tree_list.size() - 1);
 }
