@@ -3245,6 +3245,8 @@ int model_load(const  char* filename, ship_info* sip, ErrorType error_type, bool
 			if (!stricmp(filename , Polygon_models[i]->filename) && !allow_redundant_load) {
 				// Model already loaded; just return.
 				Polygon_models[i]->used_this_mission++;
+				if (sip != nullptr)
+					sip->model_num = Polygon_models[i]->id;
 				return Polygon_models[i]->id;
 			}
 		} else if ( num == -1 )	{
@@ -3519,6 +3521,8 @@ int model_load(const  char* filename, ship_info* sip, ErrorType error_type, bool
 	model_set_bay_path_nums(pm);
 
 	unpause_parse();
+	if (sip != nullptr)
+		sip->model_num = pm->id;
 	return pm->id;
 }
 

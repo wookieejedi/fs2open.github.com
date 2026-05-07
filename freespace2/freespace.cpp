@@ -7437,11 +7437,11 @@ void Do_model_timings_test()
 	int model_id[MAX_POLYGON_MODELS];
 
 	// Load them all
-	for (auto & sip : Ship_info) {
-		sip.model_num = model_load(sip.pof_file);
+	for (auto & si : Ship_info) {
+		si.model_num = model_load(&si, false);
 
-		model_used[sip.model_num % MAX_POLYGON_MODELS]++;
-		model_id[sip.model_num % MAX_POLYGON_MODELS] = sip.model_num;
+		model_used[si.model_num % MAX_POLYGON_MODELS]++;
+		model_id[si.model_num % MAX_POLYGON_MODELS] = si.model_num;
 	}
 
 	Texture_fp = fopen( NOX("ShipTextures.txt"), "wt" );
