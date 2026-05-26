@@ -21,7 +21,7 @@ layout (std140) uniform genericData {
 	vec3 globalLightDiffuse;
 	float stepsize;
 	vec3 nebPos;
-	float opacitydistance;
+	float opacitydistance; // pre-baked CPU-side as log(alphalim)/opacitydistance; lets us use exp() not pow() per step
 	vec3 nebSize;
 	float alphalim;
 	vec3 nebulaColor;
@@ -121,7 +121,9 @@ void main()
 
 		float stepsize_current = min(max(stepsize, step(stepcolor_alpha, 0.01) * volume_sample.x * udfScale), mintMax - stept);
 
-		float stepalpha = -(pow(alphalim, 1.0 / (opacitydistance / stepsize_current)) - 1.0f) * stepcolor_alpha;
+		// pow(alphalim, stepsize_current / opacitydistance_raw) == exp((log(alphalim)/opacitydistance_raw) * stepsize_current)
+		// opacitydistance is uploaded pre-baked as that ratio; saves a per-step pow().
+		float stepalpha = -(exp(opacitydistance * stepsize_current) - 1.0) * stepcolor_alpha;
 		//All the following computations are just required if we have a stepcoloralpha that is non-zero.
 		if(stepcolor_alpha > 0.01)
 		{
@@ -151,7 +153,8 @@ void main()
 			//Emissive
 			cumnebdist += stepcolor_alpha * stepsize_current;
 			vec3 emissive_lod = textureLod(emissive, fragTexCoord.xy, clamp(cumnebdist * emissiveSpreadFactor, 0, float(textureQueryLevels(emissive) - 1))).rgb;
-			vec3 stepcolor_emissive = clamp(emissive_lod.rgb * pow(alphalim, 1.0 / (opacitydistance / ((depth - stept) * emissiveFalloff + 0.01))) * emissiveIntensity, 0, 1);
+			// Same exp() trick as above; opacitydistance is (log(alphalim) / opacitydistance_raw).
+			vec3 stepcolor_emissive = clamp(emissive_lod.rgb * exp(opacitydistance * ((depth - stept) * emissiveFalloff + 0.01)) * emissiveIntensity, 0, 1);
 
 			//Step finish
 			vec3 stepcolor = clamp(stepcolor_diffuse + stepcolor_emissive, 0, 1);

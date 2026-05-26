@@ -153,7 +153,8 @@ vec3 FresnelLazarovEnv(vec3 specColor, vec3 view, vec3 normal, float gloss)
 
 void GetLightInfo(int i, out vec3 lightDir, out float attenuation)
 {
-	lightDir = normalize(lights[i].position.xyz);
+	// For directional lights, position.xyz is pre-normalized on the CPU (see set_light in graphics/light.cpp).
+	lightDir = lights[i].position.xyz;
 	attenuation = 1.0;
 	if (lights[i].light_type != LT_DIRECTIONAL) {
 		// Positional light source

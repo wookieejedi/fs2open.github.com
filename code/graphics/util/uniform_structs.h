@@ -282,10 +282,10 @@ struct fxaa_data {
 };
 
 struct fog_data {
-	vec3d fog_color;
+	vec3d fog_color;   // stored pre-linearized (sRGB^2.2) so the shader doesn't pow() it per pixel
 	float fog_start;
 
-	float fog_density;
+	float fog_density; // stored as logf(density) so the shader can use exp(log_density * x) instead of pow()
 	float zNear;
 	float zFar;
 
@@ -306,8 +306,8 @@ struct volumetric_fog_data {
 	float stepsize;
 	
 	vec3d nebPos;
-	float opacitydistance;
-	
+	float opacitydistance; // stored as logf(alphalimit) / opacitydistance so the shader uses exp() instead of pow() per step
+
 	vec3d nebSize;
 	float alphalimit;
 

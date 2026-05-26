@@ -149,6 +149,13 @@ static void set_light(int light_num, gr_light* ltp) {
 	vm_vec_transform(&gr_light_uniforms[light_num].position, &ltp->Position, &gr_view_matrix);
 	vm_vec_transform(&gr_light_uniforms[light_num].direction, &ltp->SpotDir, &gr_view_matrix, false);
 
+	// For directional lights the shader only uses normalize(position); pre-normalize on CPU so it doesn't run per pixel/vertex.
+	// Length doesn't matter for directional lights (no distance term) but does for point/tube/cone, so only normalize here.
+	if (ltp->type == static_cast<int>(Light_Type::Directional)) {
+		vec3d* pos_xyz = reinterpret_cast<vec3d*>(&gr_light_uniforms[light_num].position);
+		vm_vec_normalize_safe(pos_xyz);
+	}
+
 	gr_light_uniforms[light_num].diffuse_color = vm_vec4_to_vec3(ltp->Diffuse);
 
 	gr_light_uniforms[light_num].light_type = ltp->type;

@@ -312,7 +312,6 @@ void gr_opengl_deferred_lighting_finish()
 		auto header = light_uniform_aligner.getHeader<deferred_global_data>();
 		if (Shadow_quality != ShadowQuality::Disabled) {
 			// Avoid this overhead when we are not going to use these values
-			header->shadow_mv_matrix = Shadow_view_matrix_light;
 			for (size_t i = 0; i < MAX_SHADOW_CASCADES; ++i) {
 				header->shadow_proj_matrix[i] = Shadow_proj_matrix[i];
 			}
@@ -321,7 +320,11 @@ void gr_opengl_deferred_lighting_finish()
 			header->middist = Shadow_cascade_distances[2];
 			header->fardist = Shadow_cascade_distances[3];
 
-			vm_inverse_matrix4(&header->inv_view_matrix, &Shadow_view_matrix_render);
+			// Pre-multiply (shadow_mv * inv_view) so deferred-f.sdr does one mat*vec instead of mat*mat*vec per pixel.
+			matrix4 inv_view;
+			vm_inverse_matrix4(&inv_view, &Shadow_view_matrix_render);
+			vm_matrix4_x_matrix4(&header->shadow_mv_matrix, &Shadow_view_matrix_light, &inv_view);
+			header->inv_view_matrix = inv_view; // kept in UBO to preserve std140 layout; shader no longer uses it
 		}
 
 		header->invScreenWidth = 1.0f / gr_screen.max_w;
@@ -372,6 +375,8 @@ void gr_opengl_deferred_lighting_finish()
 				light_data->lightDir.xyz.x = view_dir.xyzw.x;
 				light_data->lightDir.xyz.y = view_dir.xyzw.y;
 				light_data->lightDir.xyz.z = view_dir.xyzw.z;
+				// Pre-normalize so deferred-f.sdr doesn't normalize the same uniform per pixel
+				vm_vec_normalize_safe(&light_data->lightDir);
 			}
 		}
 		for (auto& l : sphere_lights) {
@@ -549,13 +554,15 @@ void gr_opengl_deferred_lighting_finish()
 		Current_shader->program->Uniforms.setTextureUniform("depth_tex", 1);
 
 		opengl_set_generic_uniform_data<graphics::generic_data::fog_data>([&](graphics::generic_data::fog_data* data) {
-			data->fog_start       = fog_near;
-			data->fog_density     = fog_density;
-			data->fog_color.xyz.x = r / 255.f;
-			data->fog_color.xyz.y = g / 255.f;
-			data->fog_color.xyz.z = b / 255.f;
-			data->zNear           = Min_draw_distance;
-			data->zFar            = Max_draw_distance;
+			data->fog_start = fog_near;
+			// Pre-compute log(density) so the shader can use exp(log_density * x) instead of pow(density, x) per pixel
+			data->fog_density = logf(fog_density);
+			// Pre-linearize color (sRGB -> linear) on the CPU so the shader doesn't pow() a uniform per pixel
+			data->fog_color.xyz.x = powf(r / 255.f, 2.2f);
+			data->fog_color.xyz.y = powf(g / 255.f, 2.2f);
+			data->fog_color.xyz.z = powf(b / 255.f, 2.2f);
+			data->zNear = Min_draw_distance;
+			data->zFar  = Max_draw_distance;
 		});
 
 		opengl_draw_full_screen_textured(0.0f, 0.0f, 1.0f, 1.0f);
@@ -626,7 +633,9 @@ void gr_opengl_deferred_lighting_finish()
 			data->nebPos = neb.getPos();
 			data->nebSize = neb.getSize();
 			data->stepsize = neb.getStepsize();
-			data->opacitydistance = neb.getOpacityDistance();
+			// Repurposed: stores log(alphalimit) / opacitydistance so the shader can use
+			// exp(opacitydistance_term * x) per step instead of pow(alphalim, x/opacitydistance).
+			data->opacitydistance = logf(neb.getAlphaLim()) / neb.getOpacityDistance();
 			data->alphalimit = neb.getAlphaLim();
 			data->nebColor[0] = std::get<0>(neb.getNebulaColor());
 			data->nebColor[1] = std::get<1>(neb.getNebulaColor());

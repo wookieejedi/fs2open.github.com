@@ -13,10 +13,10 @@ layout (std140) uniform genericData {
 
 	float x1;
 	float toe_B;
-	float toe_lnA;
+	float toe_lnA; // pre-baked CPU-side as expf(toe_lnA); now stores toe_A. Lets shader use pow() instead of exp(...+...*log()).
 	float sh_B;
 
-	float sh_lnA;
+	float sh_lnA; // pre-baked CPU-side as expf(sh_lnA); now stores sh_A.
 	float sh_offsetX;
 	float sh_offsetY;
 };
@@ -111,7 +111,8 @@ vec3 linearToneMapping(vec3 hdr_color)
 }
 
 float toe( float x ) {
-	return exp(toe_lnA + toe_B * log(x));
+	// toe_lnA holds expf(toe_lnA) (i.e. toe_A) — see tonemapping_data fill in gropenglpostprocessing.cpp
+	return toe_lnA * pow(x, toe_B);
 }
 
 float linear( float x ) {
@@ -122,7 +123,8 @@ float linear( float x ) {
 float shoulder ( float x ) {
 	// Scale is -1 so reverse subtraction to save a mult
 	x = sh_offsetX - x;
-	x = exp(sh_lnA + sh_B * log(x));
+	// sh_lnA holds expf(sh_lnA) (i.e. sh_A)
+	x = sh_lnA * pow(x, sh_B);
 	x = sh_offsetY - x;
 	return x;
 }

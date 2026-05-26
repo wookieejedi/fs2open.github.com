@@ -12,6 +12,8 @@ out vec4 fragOut2; // Emissive buffer
 
 flat in mat4 invModelMatrix;
 flat in vec3 decalDirection;
+// These are uploaded as cos(angle) (not angle in radians) so the shader can compare dot() directly
+// and avoid a per-pixel acos(). See decals.cpp where DECAL_ANGLE_CUTOFF / DECAL_ANGLE_FADE_START are baked.
 flat in float normal_angle_cutoff;
 flat in float angle_fade_start;
 flat in float alpha_scale;
@@ -73,16 +75,18 @@ vec3 getPixelNormal(vec3 frag_position, vec2 tex_coord, inout float alpha, out v
     tangent = normalize(pos_dy);
 #endif
 
-	//Calculate angle between surface normal and decal direction
-	float angle = acos(dot(normal, decalDirection));
+	// Compare cosines directly instead of angles: avoids a per-pixel acos().
+	// Larger angle => smaller cos, so the cutoff direction flips: discard when ndotd is *below* cos(cutoff).
+	// The smoothstep edges are also swapped (cos is monotonically decreasing).
+	float ndotd = dot(normal, decalDirection);
 
-	if (angle > normal_angle_cutoff) {
+	if (ndotd < normal_angle_cutoff) {
 		// The angle between surface normal and decal direction is too big
 		discard;
 	}
 
 	// Make a smooth alpha transition leading up to an edge
-	alpha = alpha * (1 - smoothstep(angle_fade_start, normal_angle_cutoff, angle));
+	alpha = alpha * smoothstep(normal_angle_cutoff, angle_fade_start, ndotd);
 
 	return normal;
 }

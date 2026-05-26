@@ -77,7 +77,8 @@ vec3 ExpandLightSize(in vec3 lightDir, in vec3 reflectDir) {
 void GetLightInfo(vec3 position, in float alpha, in vec3 reflectDir, out vec3 lightDirOut, out float attenuation, out float area_normalisation)
 {
 	if (lightType == LT_DIRECTIONAL) {
-		lightDirOut = normalize(lightDir);
+		// lightDir is pre-normalized on the CPU (see prepare_light_uniforms in gropengldeferred.cpp)
+		lightDirOut = lightDir;
 		attenuation = 1.0;
 		area_normalisation = 1.0;
 	} else {
@@ -258,7 +259,8 @@ void main()
 		GetLightInfo(position, alpha, reflectDir, lightDir, attenuation, area_normalisation);
 
 		if (enable_shadows) {
-			vec4 fragShadowPos = shadow_mv_matrix * inv_view_matrix * vec4(position, 1.0);
+			// shadow_mv_matrix has been pre-multiplied with inv_view_matrix on the CPU (see gropengldeferred.cpp)
+			vec4 fragShadowPos = shadow_mv_matrix * vec4(position, 1.0);
 			vec4 fragShadowUV[4];
 			fragShadowUV[0] = transformToShadowMap(shadow_proj_matrix[0], 0, fragShadowPos);
 			fragShadowUV[1] = transformToShadowMap(shadow_proj_matrix[1], 1, fragShadowPos);

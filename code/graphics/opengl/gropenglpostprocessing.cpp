@@ -77,14 +77,16 @@ void opengl_post_pass_tonemap()
 		auto tn = ltp::current_tonemapper();
 		data->tonemapper = (int)tn;
 		data->sh_B = ppc.sh_B;
-		data->sh_lnA = ppc.sh_lnA;
-		data->sh_offsetX =ppc.sh_offsetX;
+		// Pre-bake exp(lnA) on the CPU so the shader can do A * pow(x, B) instead of
+		// exp(lnA + B * log(x)) per pixel. Same UBO field, different semantics (now stores A, not lnA).
+		data->sh_lnA = expf(ppc.sh_lnA);
+		data->sh_offsetX = ppc.sh_offsetX;
 		data->sh_offsetY = ppc.sh_offsetY;
 		data->toe_B = ppc.toe_B;
-		data->toe_lnA = ppc.toe_lnA;
+		data->toe_lnA = expf(ppc.toe_lnA);
 		data->x0 = ppc.x0;
 		data->x1 = ppc.x1;
-		data->y0 = ppc.y0; 
+		data->y0 = ppc.y0;
 		data->exposure = ltp::current_exposure(); });
 
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, Scene_ldr_texture, 0);

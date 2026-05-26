@@ -365,9 +365,12 @@ void initializeMission() {
 	active_decals.clear();
 }
 
-// Discard any fragments where the angle to the direction to greater than 45°
-const float DECAL_ANGLE_CUTOFF = fl_radians(45.f);
-const float DECAL_ANGLE_FADE_START = fl_radians(30.f);
+// Discard any fragments where the angle to the direction to greater than 45°.
+// We upload cos(angle) instead of the angle itself so the shader can compare cosines
+// directly via dot() and skip a per-pixel acos(). Note cos is monotonically decreasing,
+// so the cutoff/fade-start comparison directions get flipped in the shader.
+const float DECAL_ANGLE_CUTOFF = cosf(fl_radians(45.f));
+const float DECAL_ANGLE_FADE_START = cosf(fl_radians(30.f));
 
 static matrix4 getDecalTransform(const Decal& decal, float alpha) {
 	Assertion(decal.object.objp()->type == OBJ_SHIP, "Only ships are currently supported for decals!");
