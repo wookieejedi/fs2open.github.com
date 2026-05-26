@@ -258,7 +258,9 @@ void main()
 		GetLightInfo(position, alpha, reflectDir, lightDir, attenuation, area_normalisation);
 
 		if (enable_shadows) {
-			vec4 fragShadowPos = shadow_mv_matrix * inv_view_matrix * vec4(position, 1.0);
+			// Right-associate so we chain two mat4*vec4 (32 muls) instead of a mat4*mat4 followed by
+			// mat4*vec4 (80 muls) per shadowed pixel.
+			vec4 fragShadowPos = shadow_mv_matrix * (inv_view_matrix * vec4(position, 1.0));
 			vec4 fragShadowUV[4];
 			fragShadowUV[0] = transformToShadowMap(shadow_proj_matrix[0], 0, fragShadowPos);
 			fragShadowUV[1] = transformToShadowMap(shadow_proj_matrix[1], 1, fragShadowPos);

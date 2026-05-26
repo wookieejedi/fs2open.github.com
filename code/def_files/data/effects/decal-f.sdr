@@ -88,7 +88,9 @@ vec3 getPixelNormal(vec3 frag_position, vec2 tex_coord, inout float alpha, out v
 }
 
 vec2 getDecalTexCoord(vec3 view_pos, inout float alpha) {
-	vec4 object_pos = invModelMatrix * invViewMatrix * vec4(view_pos, 1.0);
+	// Right-associate so we chain two mat4*vec4 (32 muls) instead of mat4*mat4 + mat4*vec4 (80 muls)
+	// for every decal pixel.
+	vec4 object_pos = invModelMatrix * (invViewMatrix * vec4(view_pos, 1.0));
 
 	bvec3 invalidComponents = greaterThan(abs(object_pos.xyz), vec3(0.5));
 	bvec4 nanComponents = isnan(object_pos); // nan can happen some times if we have an infinite depth value

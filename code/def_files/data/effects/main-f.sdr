@@ -246,7 +246,10 @@ void main()
 	vec2 distort = vec2(0.0, 0.0);
 
 	if (effect_num >= 0) {
-		distort = vec2(cos(vertIn.position.x*vertIn.position.w*0.005+anim_timer*20.0)*sin(vertIn.position.y*vertIn.position.w*0.005),sin(vertIn.position.x*vertIn.position.w*0.005+anim_timer*20.0)*cos(vertIn.position.y*vertIn.position.w*0.005))*0.03;
+		// CSE the two sin/cos arguments — original code recomputed both expressions twice each.
+		float distortA = vertIn.position.x * vertIn.position.w * 0.005 + anim_timer * 20.0;
+		float distortB = vertIn.position.y * vertIn.position.w * 0.005;
+		distort = vec2(cos(distortA) * sin(distortB), sin(distortA) * cos(distortB)) * 0.03;
 	}
 
 	#prereplace IF_FLAG MODEL_SDR_FLAG_DIFFUSE
@@ -388,11 +391,16 @@ void main()
 	#prereplace ENDIF_FLAG //MODEL_SDR_FLAG_DIFFUSE
 	
 	if (effect_num == 0) {
-		float shinefactor = 1.0/(1.0 + pow(abs((fract(abs(texCoord.x))-anim_timer) * 1000.0), 2.0)) * 1000.0;
+		// pow(abs(x), 2.0) == x*x; also CSE the (fract(abs(texCoord.x)) - anim_timer) subexpression.
+		float fa = fract(abs(texCoord.x)) - anim_timer;
+		float scaled = fa * 1000.0;
+		float shinefactor = 1.0/(1.0 + scaled * scaled) * 1000.0;
 		emissiveColor.rgb += vec3(shinefactor);
-		baseColor.a = baseColor.a * clamp(shinefactor * (fract(abs(texCoord.x))-anim_timer) * -10000.0,0.0,1.0);
+		baseColor.a = baseColor.a * clamp(shinefactor * fa * -10000.0, 0.0, 1.0);
 	} else if (effect_num == 1) {
-		float shinefactor = 1.0/(1.0 + pow(abs(vertIn.position.y-anim_timer), 2.0));
+		float ya = vertIn.position.y - anim_timer;
+		// pow(abs(x), 2.0) == x*x
+		float shinefactor = 1.0/(1.0 + ya * ya);
 		emissiveColor.rgb += vec3(shinefactor);
 		#prereplace IF_NOT_FLAG MODEL_SDR_FLAG_LIGHT
 			// ATI Wireframe fix *grumble*
@@ -401,7 +409,10 @@ void main()
 	} else if (effect_num == 2) {
 		vec2 screenPos = gl_FragCoord.xy * vec2(vpwidth,vpheight);
 		baseColor.a = baseColor.a;
-		float cloak_interp = (sin(vertIn.position.x*vertIn.position.w*0.005+anim_timer*20.0)*sin(vertIn.position.y*vertIn.position.w*0.005)*0.5)-0.5;
+		// CSE: same sin arguments as the `distort` computation above
+		float cloakA = vertIn.position.x * vertIn.position.w * 0.005 + anim_timer * 20.0;
+		float cloakB = vertIn.position.y * vertIn.position.w * 0.005;
+		float cloak_interp = (sin(cloakA) * sin(cloakB) * 0.5) - 0.5;
 		#prereplace IF_FLAG MODEL_SDR_FLAG_LIGHT
 			baseColor.rgb = mix(texture(sFramebuffer, screenPos + distort*anim_timer + anim_timer*0.1*normal.xy).rgb,baseColor.rgb,clamp(cloak_interp+anim_timer*2.0,0.0,1.0));
 		#prereplace ELSE_FLAG //MODEL_SDR_FLAG_LIGHT

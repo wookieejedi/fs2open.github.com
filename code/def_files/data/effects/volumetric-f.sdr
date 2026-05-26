@@ -94,6 +94,16 @@ void main()
 
 	vec3 sidestep = 1.0 / vec3(textureSize(volume_tex, 0));
 
+	// Hoist log(alphalim)/opacitydistance out of the raymarch loop so each step does
+	//   exp(log_alphalim_div_opacity * x)
+	// instead of
+	//   pow(alphalim, 1.0 / (opacitydistance / x))   <- = exp(log(alphalim) * x / opacitydistance)
+	// which would compute log(alphalim) and two divides every iteration. Both pow() call sites benefit.
+	float log_alphalim_div_opacity = log(alphalim) / opacitydistance;
+
+	// directionalLightStep depends only on uniforms, so hoist it out of both the outer and inner loops.
+	float directionalLightStep = 4.0 / float(directionalLightSampleSteps);
+
 	for(float stept = maxtMin; stept < mintMax;) {
 		//Step setup
 		vec3 position = camera + rayDirection * stept - nebPos;
@@ -121,7 +131,8 @@ void main()
 
 		float stepsize_current = min(max(stepsize, step(stepcolor_alpha, 0.01) * volume_sample.x * udfScale), mintMax - stept);
 
-		float stepalpha = -(pow(alphalim, 1.0 / (opacitydistance / stepsize_current)) - 1.0f) * stepcolor_alpha;
+		// pow(alphalim, stepsize/opacitydistance) == exp((log(alphalim)/opacitydistance) * stepsize)
+		float stepalpha = -(exp(log_alphalim_div_opacity * stepsize_current) - 1.0) * stepcolor_alpha;
 		//All the following computations are just required if we have a stepcoloralpha that is non-zero.
 		if(stepcolor_alpha > 0.01)
 		{
@@ -137,7 +148,7 @@ void main()
 			vec3 stepcolor_neb = nebulaColor;
 #endif
 			vec3 stepcolor_diffuse = stepcolor_neb * henyey_greenstein(dot(rayDirection, globalLightDirection));
-			float directionalLightStep = 4.0 / float(directionalLightSampleSteps);
+			// directionalLightStep is now hoisted above the outer loop (uniform-only expression)
 			float directionalLightDepth = 0.1;
 			//From the current position in the volumetric cloud, sample towards the sun to test whether or not the current part of the nebula is bright or not
 			for(int dlstep = 1; dlstep <= directionalLightSampleSteps; dlstep++){
@@ -151,7 +162,7 @@ void main()
 			//Emissive
 			cumnebdist += stepcolor_alpha * stepsize_current;
 			vec3 emissive_lod = textureLod(emissive, fragTexCoord.xy, clamp(cumnebdist * emissiveSpreadFactor, 0, float(textureQueryLevels(emissive) - 1))).rgb;
-			vec3 stepcolor_emissive = clamp(emissive_lod.rgb * pow(alphalim, 1.0 / (opacitydistance / ((depth - stept) * emissiveFalloff + 0.01))) * emissiveIntensity, 0, 1);
+			vec3 stepcolor_emissive = clamp(emissive_lod.rgb * exp(log_alphalim_div_opacity * ((depth - stept) * emissiveFalloff + 0.01)) * emissiveIntensity, 0, 1);
 
 			//Step finish
 			vec3 stepcolor = clamp(stepcolor_diffuse + stepcolor_emissive, 0, 1);

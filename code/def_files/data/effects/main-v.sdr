@@ -160,8 +160,11 @@ void main()
 		}
 	#prereplace ENDIF_FLAG //MODEL_SDR_FLAG_THRUSTER
 	// Transform the normal into eye space and normalize the result.
-	normal = normalize(mat3(modelViewMatrix) * mat3(orient) * vertNormal);
-	position = modelViewMatrix * orient * vertex;
+	// Hoist mat3(modelViewMatrix) * mat3(orient) so the tangent calculation below can reuse it.
+	mat3 normalMatrix = mat3(modelViewMatrix) * mat3(orient);
+	normal = normalize(normalMatrix * vertNormal);
+	// Right-associate so we do mat*(mat*vec) (32 muls) instead of (mat*mat)*vec (80 muls) per vertex.
+	position = modelViewMatrix * (orient * vertex);
 	#ifdef MODEL_SDR_FLAG_SHADOW_MAP
 		gl_Position = position;
 		#if !defined(GL_ARB_gpu_shader5)
@@ -175,8 +178,10 @@ void main()
 		gl_Position = projMatrix * position;
 	#endif
 	#prereplace IF_FLAG MODEL_SDR_FLAG_SHADOWS
-		vec4 shadowPos = shadow_mv_matrix * modelMatrix * orient * vertPosition;
-		vertOut.shadowPos = shadow_mv_matrix * modelMatrix * orient * vertPosition;
+		// Right-associate mat*mat*mat*vec so we chain three mat*vec ops (48 muls) instead of two mat*mat
+		// followed by mat*vec (144 muls). Also reuse the local instead of recomputing for shadowPos.
+		vec4 shadowPos = shadow_mv_matrix * (modelMatrix * (orient * vertPosition));
+		vertOut.shadowPos = shadowPos;
 		vertOut.shadowUV[0] = transformToShadowMap(shadow_proj_matrix[0], 0, shadowPos);
 		vertOut.shadowUV[1] = transformToShadowMap(shadow_proj_matrix[1], 1, shadowPos);
 		vertOut.shadowUV[2] = transformToShadowMap(shadow_proj_matrix[2], 2, shadowPos);
@@ -184,7 +189,7 @@ void main()
 	#prereplace ENDIF_FLAG //MODEL_SDR_FLAG_SHADOWS
 
 	// Setup stuff for normal maps and envmaps
-	vec3 t = normalize(mat3(modelViewMatrix) * mat3(orient) * vertTangent.xyz);
+	vec3 t = normalize(normalMatrix * vertTangent.xyz);
 	vec3 b = cross(normal, t) * vertTangent.w;
 	vertOut.tangentMatrix = mat3(t, b, normal);
 
@@ -203,7 +208,8 @@ void main()
 	#prereplace ENDIF_FLAG //MODEL_SDR_FLAG_TRANSFORM
 
 	if(use_clip_plane) {
-		gl_ClipDistance[0] = dot(clip_equation, modelMatrix * orient * vertex);
+		// Right-associate to do two mat*vec (32 muls) instead of mat*mat + mat*vec (80 muls).
+		gl_ClipDistance[0] = dot(clip_equation, modelMatrix * (orient * vertex));
 	} else {
 		gl_ClipDistance[0] = 1.0;
 	}
