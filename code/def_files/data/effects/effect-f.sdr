@@ -28,9 +28,10 @@ void main()
 	vec4 fragmentColor = texture(baseMap, fragTexCoord.xyz);
 	fragmentColor.rgb = mix(fragmentColor.rgb, srgb_to_linear(fragmentColor.rgb), float(srgb));
 	fragmentColor *= mix(fragColor, vec4(srgb_to_linear(fragColor.rgb), fragColor.a), float(srgb));
-	vec2 offset = vec2(fragRadius * abs(0.5 - fragTexCoord.x) * 2.0, fragRadius * abs(0.5 - fragTexCoord.y) * 2.0);
-	float offset_len = length(offset);
-	if ( offset_len > fragRadius ) {
+	vec2 offset = fragRadius * abs(vec2(0.5) - fragTexCoord.xy) * 2.0;
+	float offset_len_sq = dot(offset, offset);
+	float fragRadius_sq = fragRadius * fragRadius;
+	if ( offset_len_sq > fragRadius_sq ) {
 		fragOut0 = vec4(0.0, 0.0, 0.0, 0.0);
 		return;
 	}
@@ -46,7 +47,7 @@ void main()
 		fragDepthLinear = ( 2.0 * farZ * nearZ ) / ( farZ + nearZ - gl_FragCoord.z * (farZ-nearZ) );
 	}
 	// assume UV of 0.5, 0.5 is the centroid of this sphere volume
-	float depthOffset = sqrt((fragRadius*fragRadius) - (offset_len*offset_len));
+	float depthOffset = sqrt(fragRadius_sq - offset_len_sq);
 	float frontDepth = fragDepthLinear - depthOffset;
 	float backDepth = fragDepthLinear + depthOffset;
 	float intensity = smoothstep(max(nearZ, frontDepth), backDepth, sceneDepthLinear);
