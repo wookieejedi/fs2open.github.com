@@ -4,8 +4,6 @@ in vec4 fragTexCoord;
 
 uniform sampler2D tex;
 
-const float TapSize = 1.0;
-
 layout (std140) uniform genericData {
 	float texSize;
 	int level;
@@ -13,28 +11,37 @@ layout (std140) uniform genericData {
 
 // Gaussian Blur
 // 2 passes required
+//
+// Uses bilinear-sampling optimization: by sampling between two texels at a weighted
+// offset, one bilinear fetch returns the weighted sum of two texels. This collapses
+// an 11-tap symmetric kernel (center + 5 each side) into 7 taps (center + 3 each side).
+// Original weights (w0..w5) = 0.1362, 0.1297, 0.1120, 0.0877, 0.0623, 0.0402.
+// Pairs: (w1,w2) and (w3,w4); w5 stays unpaired.
+// See https://www.rastergrid.com/blog/2010/09/efficient-gaussian-blur-with-linear-sampling/
 void main()
 {
 	// Echelon9 - Due to Apple not implementing array constructors in OS X's
 	// GLSL implementation we need to setup the arrays this way as a workaround
-	float BlurWeights[6];
-	BlurWeights[5] = 0.0402;
-	BlurWeights[4] = 0.0623;
-	BlurWeights[3] = 0.0877;
-	BlurWeights[2] = 0.1120;
-	BlurWeights[1] = 0.1297;
-	BlurWeights[0] = 0.1362;
+	float BlurWeights[4];
+	float BlurOffsets[4];
+	BlurWeights[0] = 0.1362;  BlurOffsets[0] = 0.0;
+	BlurWeights[1] = 0.2417;  BlurOffsets[1] = 1.46347125;   // (1*w1 + 2*w2) / (w1+w2)
+	BlurWeights[2] = 0.1500;  BlurOffsets[2] = 3.41533333;   // (3*w3 + 4*w4) / (w3+w4)
+	BlurWeights[3] = 0.0402;  BlurOffsets[3] = 5.0;
+
 	vec4 sum = textureLod(tex, fragTexCoord.xy, float(level)) * BlurWeights[0];
 #ifdef PASS_0
-	for (int i = 1; i < 6; i++) {
-		sum += textureLod(tex, vec2(clamp(fragTexCoord.x - float(i) * (texSize) * TapSize, 0.0, 1.0), fragTexCoord.y), float(level)) * BlurWeights[i];
-		sum += textureLod(tex, vec2(clamp(fragTexCoord.x + float(i) * (texSize) * TapSize, 0.0, 1.0), fragTexCoord.y), float(level)) * BlurWeights[i];
+	for (int i = 1; i < 4; i++) {
+		float off = BlurOffsets[i] * texSize;
+		sum += textureLod(tex, vec2(clamp(fragTexCoord.x - off, 0.0, 1.0), fragTexCoord.y), float(level)) * BlurWeights[i];
+		sum += textureLod(tex, vec2(clamp(fragTexCoord.x + off, 0.0, 1.0), fragTexCoord.y), float(level)) * BlurWeights[i];
 	}
 #endif
 #ifdef PASS_1
-	for (int i = 1; i < 6; i++) {
-		sum += textureLod(tex, vec2(fragTexCoord.x, clamp(fragTexCoord.y - float(i) * (texSize) * TapSize, 0.0, 1.0)), float(level)) * BlurWeights[i];
-		sum += textureLod(tex, vec2(fragTexCoord.x, clamp(fragTexCoord.y + float(i) * (texSize) * TapSize, 0.0, 1.0)), float(level)) * BlurWeights[i];
+	for (int i = 1; i < 4; i++) {
+		float off = BlurOffsets[i] * texSize;
+		sum += textureLod(tex, vec2(fragTexCoord.x, clamp(fragTexCoord.y - off, 0.0, 1.0)), float(level)) * BlurWeights[i];
+		sum += textureLod(tex, vec2(fragTexCoord.x, clamp(fragTexCoord.y + off, 0.0, 1.0)), float(level)) * BlurWeights[i];
 	}
 #endif
 	fragOut0 = sum;
