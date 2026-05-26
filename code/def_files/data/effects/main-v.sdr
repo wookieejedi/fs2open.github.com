@@ -160,7 +160,9 @@ void main()
 		}
 	#prereplace ENDIF_FLAG //MODEL_SDR_FLAG_THRUSTER
 	// Transform the normal into eye space and normalize the result.
-	normal = normalize(mat3(modelViewMatrix) * mat3(orient) * vertNormal);
+	// Hoist mat3(modelViewMatrix) * mat3(orient) so the tangent calculation below can reuse it.
+	mat3 normalMatrix = mat3(modelViewMatrix) * mat3(orient);
+	normal = normalize(normalMatrix * vertNormal);
 	position = modelViewMatrix * orient * vertex;
 	#ifdef MODEL_SDR_FLAG_SHADOW_MAP
 		gl_Position = position;
@@ -176,7 +178,7 @@ void main()
 	#endif
 	#prereplace IF_FLAG MODEL_SDR_FLAG_SHADOWS
 		vec4 shadowPos = shadow_mv_matrix * modelMatrix * orient * vertPosition;
-		vertOut.shadowPos = shadow_mv_matrix * modelMatrix * orient * vertPosition;
+		vertOut.shadowPos = shadowPos;
 		vertOut.shadowUV[0] = transformToShadowMap(shadow_proj_matrix[0], 0, shadowPos);
 		vertOut.shadowUV[1] = transformToShadowMap(shadow_proj_matrix[1], 1, shadowPos);
 		vertOut.shadowUV[2] = transformToShadowMap(shadow_proj_matrix[2], 2, shadowPos);
@@ -184,7 +186,7 @@ void main()
 	#prereplace ENDIF_FLAG //MODEL_SDR_FLAG_SHADOWS
 
 	// Setup stuff for normal maps and envmaps
-	vec3 t = normalize(mat3(modelViewMatrix) * mat3(orient) * vertTangent.xyz);
+	vec3 t = normalize(normalMatrix * vertTangent.xyz);
 	vec3 b = cross(normal, t) * vertTangent.w;
 	vertOut.tangentMatrix = mat3(t, b, normal);
 
