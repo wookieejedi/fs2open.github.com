@@ -45,7 +45,7 @@ void main()
  #ifdef FLAG_SATURATION
  // Saturation
 	vec4 color_grayscale = color_in;
-	color_grayscale.rgb = vec3(dot(color_in.rgb, vec3(0.299, 0.587, 0.184)));
+	color_grayscale.rgb = vec3(dot(color_in.rgb, vec3(0.299, 0.587, 0.114)));
 	color_out = mix(color_in, color_grayscale, 1.0 - saturation);
  #else
 	color_out = color_in;
@@ -80,7 +80,7 @@ void main()
 	// Experimental cutoff shader
 	if (cutoff > 0.0) {
 		vec4 color_greyscale;
-		color_greyscale.rgb = vec3(dot(color_in.rgb, vec3(0.299, 0.587, 0.184)));
+		color_greyscale.rgb = vec3(dot(color_in.rgb, vec3(0.299, 0.587, 0.114)));
 		vec4 normalized_col;
 		float col_length = (length(color_out.rgb));
 		if (col_length > 1.0) {
