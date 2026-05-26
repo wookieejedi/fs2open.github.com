@@ -12,13 +12,12 @@ layout (std140) uniform genericData {
 
 void main() {
 	vec4 color_out = vec4(0.0, 0.0, 0.0, 1.0);
-	float factor = 0.0;
 	for (int mipmap = 0; mipmap < levels; ++mipmap) {
 		float scale = 1.0/exp2(float(mipmap));
-		factor += scale;
 		color_out.rgb += textureLod(bloomed, fragTexCoord.xy, float(mipmap)).rgb * scale;
 	}
-	color_out.rgb /= factor;
-	color_out.rgb *= bloom_intensity;
+	// factor is the closed-form sum of the geometric series 1 + 1/2 + 1/4 + ... + 1/2^(levels-1) = 2 - 2^(1-levels)
+	float factor = 2.0 - exp2(1.0 - float(levels));
+	color_out.rgb *= bloom_intensity / factor;
 	fragOut0 = color_out;
 }
