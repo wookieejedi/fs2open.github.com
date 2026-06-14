@@ -167,9 +167,16 @@ namespace headtracking
 				return false;
 			}
 
-			statusOut->pitch = data.pitch;
-			statusOut->yaw = data.yaw;
-			statusOut->roll = data.roll;
+			// FreeTrack reports rotation in radians, but the rest of the engine expects a
+			// normalized value: view_modify() multiplies these by PI2 to recover radians
+			// (a convention inherited from the TrackIR/NPClient provider, whose GetYaw()
+			// etc. already return that normalized value), and the scripting API documents
+			// the range as roughly -1..1. Without dividing by PI2 here the view is
+			// over-rotated by a factor of 2*PI, which pegs the camera against its angle
+			// limits and makes head tracking jerk and snap.
+			statusOut->pitch = data.pitch / PI2;
+			statusOut->yaw = data.yaw / PI2;
+			statusOut->roll = data.roll / PI2;
 
 			// Coordinates are in millimeters
 			statusOut->x = data.x / 1000.0f;
