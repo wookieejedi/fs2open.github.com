@@ -648,8 +648,6 @@ void scene_lights::setLightFilter(const vec3d *pos, float rad)
 
 light_indexing_info scene_lights::bufferLights()
 {
-	size_t i;
-
 	light_indexing_info light_info;
 
 	light_info.index_start = 0;
@@ -661,10 +659,8 @@ light_indexing_info scene_lights::bufferLights()
 	}
 
 	light_info.index_start = BufferedLights.size();
-	
-	for ( i = 0; i < FilteredLights.size(); ++i ) {
-		BufferedLights.push_back(FilteredLights[i]);
-	}
+
+	BufferedLights.insert(BufferedLights.end(), FilteredLights.begin(), FilteredLights.end());
 
 	light_info.num_lights = FilteredLights.size();
 

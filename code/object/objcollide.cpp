@@ -1147,7 +1147,12 @@ void obj_find_overlap_colliders(SCP_vector<int> &overlap_list_out, SCP_vector<in
     TRACE_SCOPE(tracing::FindOverlapColliders);
 
     bool first_not_added = true;
-    SCP_vector<int> overlappers;
+
+    // this is only ever called from obj_sort_and_collide (main thread, three times per frame), so keep the
+    // sweep list around between calls instead of reallocating it from scratch every time -- same reasoning
+    // as the sort_list_y/sort_list_z statics below
+    static SCP_vector<int> overlappers;
+    overlappers.clear();
 
     for (int in_index : list){
         bool overlapped = false;

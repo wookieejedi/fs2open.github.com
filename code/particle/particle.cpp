@@ -152,6 +152,20 @@ namespace particle
 			  "Usage: particles [bool]\nTurns particle system on/off.  If nothing passed, then toggles it.\n");
 
 
+	// Particles on lower detail levels are treated as 'further away' for the purposes of culling, by a factor of
+	// 2.5 ^ (Num_detail_presets - Detail.num_particles).  Detail.num_particles only changes from the options screen,
+	// so precompute the handful of possible values instead of calling powf on every single particle spawn.
+	// (Each entry is a small integer over a power of two, so all of them are exactly representable.)
+	static_assert(static_cast<int>(DefaultDetailPreset::Num_detail_presets) == MAX_DETAIL_VALUE,
+		"Particle_detail_dist_mult assumes the preset count and the analog detail range line up; recompute the table");
+	static constexpr float Particle_detail_dist_mult[MAX_DETAIL_VALUE + 1] = {
+		39.0625f,	// 2.5^4
+		15.625f,	// 2.5^3
+		6.25f,		// 2.5^2
+		2.5f,		// 2.5^1
+		1.0f		// 2.5^0
+	};
+
 	static bool maybe_cull_particle(const particle& new_particle) {
 		if (!Particles_enabled)
 		{
@@ -160,13 +174,18 @@ namespace particle
 
 		vec3d world_pos = new_particle.attachment.local_pos_to_global(new_particle.pos);
 
-		// treat particles on lower detail levels as 'further away' for the purposes of culling
-		float adjusted_dist = vm_vec_dist(&Eye_position, &world_pos) * powf(2.5f, (float)(static_cast<int>(DefaultDetailPreset::Num_detail_presets) - Detail.num_particles));
-		// treat bigger particles as 'closer'
-		adjusted_dist /= new_particle.radius;
-		float cull_start_dist = 1000.f;
-		if (adjusted_dist > cull_start_dist) {
-			if (frand() > 1.0f / (log2(adjusted_dist / cull_start_dist) + 1.0f))
+		const float dist_mult = Particle_detail_dist_mult[std::clamp(Detail.num_particles, 0, MAX_DETAIL_VALUE)];
+		constexpr float cull_start_dist = 1000.f;
+
+		// bigger particles are treated as 'closer', so the distance at which culling starts scales with the radius.
+		// Only particles that actually reach that threshold need the exact distance, so cull on the squared distance
+		// first and pay for the sqrt afterwards.
+		const float dist_threshold = (cull_start_dist * new_particle.radius) / dist_mult;
+		const float dist_sq = vm_vec_dist_squared(&Eye_position, &world_pos);
+
+		if (dist_sq > dist_threshold * dist_threshold) {
+			const float adjusted_dist = (sqrtf(dist_sq) * dist_mult) / new_particle.radius;
+			if (frand() > 1.0f / (log2f(adjusted_dist / cull_start_dist) + 1.0f))
 				return true;
 		}
 

@@ -35,9 +35,9 @@ size_t primitive_batch::load_buffer(batch_vertex* buffer, size_t n_verts)
 {
 	size_t verts_to_render = Vertices.size();
 
-	for ( size_t i = 0; i < verts_to_render; ++i) {
-		buffer[n_verts+i] = Vertices[i];
-	}
+	// batch_vertex is a trivially copyable aggregate, so this becomes a bulk copy rather than
+	// an element-at-a-time loop the compiler has to assume might alias
+	std::copy(Vertices.begin(), Vertices.end(), buffer + n_verts);
 
 	return verts_to_render;
 }
@@ -990,9 +990,14 @@ void batching_allocate_and_load_buffer(primitive_batch_buffer *draw_queue)
 		offset += item->n_verts;
 	}
 
+	// The allocation is kept at the high-water mark for the whole session, but only the vertices actually
+	// written this frame need to reach the GPU. Uploading buffer_size would keep re-sending the peak long
+	// after the frame that caused it.
+	size_t used_size = offset * sizeof(batch_vertex);
+
 	// if there are no items in this batch, we will never render it and thus there is no need to update it in vmem
-	if (num_items && draw_queue->buffer_num.isValid()) {
-		gr_update_buffer_data(draw_queue->buffer_num, draw_queue->buffer_size, draw_queue->buffer_ptr);
+	if (used_size > 0 && draw_queue->buffer_num.isValid()) {
+		gr_update_buffer_data(draw_queue->buffer_num, used_size, draw_queue->buffer_ptr);
 	}
 }
 
