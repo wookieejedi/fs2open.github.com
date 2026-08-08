@@ -474,6 +474,8 @@ add_file_folder("Graphics"
 	graphics/openxr_internal.h
 	graphics/post_processing.cpp
 	graphics/post_processing.h
+	graphics/quad_draw_list.cpp
+	graphics/quad_draw_list.h
 	graphics/render.cpp
 	graphics/render.h
 	graphics/shader_preprocess.cpp

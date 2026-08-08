@@ -16,6 +16,8 @@
 #include "gamesnd/eventmusic.h"
 #include "gamesnd/gamesnd.h"
 #include "graphics/openxr.h"
+#include "graphics/quad_draw_list.h"
+#include "graphics/render.h"
 #include "globalincs/alphacolors.h"
 #include "globalincs/linklist.h"
 #include "hud/hud.h"
@@ -60,6 +62,13 @@
 
 // This contains not only the retail HUD gauges but also any custom HUD gauges that are not specific to a ship.
 SCP_vector<std::unique_ptr<HudGauge>> default_hud_gauges;
+
+// Every gauge bitmap and every glyph drawn during a HUD pass is queued here instead of being drawn on its own. A
+// gauge is typically one small bitmap plus a few short strings, so unbatched the pass costs a material application
+// and a vertex sub-upload per element; batched, the whole pass collapses to roughly one draw call per distinct
+// bitmap plus one per font. Bitmaps occupy the lower layer and text the upper one, so a gauge's labels still land
+// over its own background even though the two are now drawn in separate passes.
+static graphics::quad_draw_list HUD_draw_list;
 
 // new values for HUD alpha
 #define HUD_NEW_ALPHA_DIM				80	
@@ -2117,23 +2126,34 @@ void hud_render_gauges(int cockpit_display_num, float frametime)
 		}
 	}
 
-	// Check if this ship has its own HUD gauges. 
+	// Batch for the whole pass rather than per gauge, so that text from every gauge collapses into a single draw.
+	// Ending the batch flushes it, and it is ended before the cockpit display is finished below so nothing escapes
+	// into the next render target.
+	gr_begin_quad_batch(&HUD_draw_list);
+
+	// Check if this ship has its own HUD gauges.
 	if ( sip->hud_enabled ) {
 		num_gauges = sip->hud_gauges.size();
 
 		for(j = 0; j < num_gauges; j++) {
 			GR_DEBUG_SCOPE("Render HUD gauge");
 
-			// only preprocess gauges if we're not rendering to cockpit
+			// only preprocess gauges if we're not rendering to cockpit.
+			// this stays above the canvas check on purpose: a gauge bound to a cockpit display fails that check
+			// during the screen pass, which is the only pass that preprocesses at all, so moving it below would
+			// mean such a gauge never got preprocessed.
 			if ( cockpit_display_num < 0 ) {
 				sip->hud_gauges[j]->preprocess();
 			}
 
-			sip->hud_gauges[j]->onFrame(frametime);
-
+			// this function is called once for the screen and again for each cockpit display, and each gauge belongs
+			// to exactly one of those passes, so decide that before doing any per-frame work -- otherwise every gauge
+			// ticks once per display it does not even draw on.
 			if ( !sip->hud_gauges[j]->setupRenderCanvas(render_target) ) {
 				continue;
 			}
+
+			sip->hud_gauges[j]->onFrame(frametime);
 
 			if ( !sip->hud_gauges[j]->canRender() ) {
 				continue;
@@ -2166,6 +2186,8 @@ void hud_render_gauges(int cockpit_display_num, float frametime)
 			default_hud_gauges[j]->render(frametime);
 		}
 	}
+
+	gr_end_quad_batch();
 
 	if ( cockpit_display_num >= 0 ) {
 		ship_end_render_cockpit_display(cockpit_display_num);

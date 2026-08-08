@@ -78,6 +78,12 @@ void g3_start_frame_func(int zbuffer_flag, const char * /*filename*/, int  /*lin
 	int width, height;
 	float aspect;
 
+	// Several HUD gauges open a 3D frame partway through the HUD pass to render a model or a radar sphere. Anything
+	// batched up to this point belongs on screen before that content, and must not be flushed once this function has
+	// started replacing the projection and view matrices, so drain it before touching any of that state. Does nothing
+	// when no batch is active.
+	gr_flush_quad_batch();
+
  	Assert( G3_count == 0 );
 	G3_count++;
 

@@ -1157,12 +1157,34 @@ inline void gr_setup_frame() {
 	gr_screen.gf_setup_frame();
 }
 
+// Declared here rather than included from render.h, which includes this header. Changing the clip rectangle moves
+// both the scissor and the offset that batched vertices already have baked into them, so anything queued has to be
+// drawn under the old rectangle before the new one takes effect. Hooking it here rather than at each call site covers
+// every caller, including scripting. Does nothing when no batch is active.
+void gr_flush_quad_batch();
+
 //#define gr_set_clip			GR_CALL(gr_screen.gf_set_clip)
 inline void gr_set_clip(int x, int y, int w, int h, int resize_mode=GR_RESIZE_FULL)
 {
+	// Re-setting the rectangle that is already in effect is common -- the HUD does it once per gauge -- and must not
+	// cost a flush or there would be nothing left to batch. Only an unresized request can be compared against the
+	// stored rectangle without repeating the backend's own resizing and clamping, so everything else conservatively
+	// flushes; a redundant flush is merely a missed merge, a missed one would draw under the wrong scissor.
+	const bool unchanged = (resize_mode == GR_RESIZE_NONE) && (x == gr_screen.offset_x) &&
+						   (y == gr_screen.offset_y) && (w == gr_screen.clip_width) && (h == gr_screen.clip_height);
+
+	if (!unchanged) {
+		gr_flush_quad_batch();
+	}
+
 	gr_screen.gf_set_clip(x, y, w, h, resize_mode);
 }
-#define gr_reset_clip		GR_CALL(gr_screen.gf_reset_clip)
+//#define gr_reset_clip		GR_CALL(gr_screen.gf_reset_clip)
+inline void gr_reset_clip()
+{
+	gr_flush_quad_batch();
+	gr_screen.gf_reset_clip();
+}
 
 void gr_set_bitmap(int bitmap_num, int alphablend = GR_ALPHABLEND_NONE, int bitbltmode = GR_BITBLT_MODE_NORMAL, float alpha = 1.0f);
 

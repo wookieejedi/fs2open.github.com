@@ -3,6 +3,7 @@
 
 #include "graphics/material.h"
 #include "graphics/matrix.h"
+#include "graphics/quad_draw_list.h"
 #include "graphics/paths/PathRenderer.h"
 #include "graphics/software/FSFont.h"
 #include "graphics/software/NVGFont.h"
@@ -87,6 +88,38 @@ draw_textured_quad(material* mat, float x1, float y1, float u1, float v1, float 
 	gr_render_primitives_immediate(mat, PRIM_TYPE_TRISTRIP, &vert_def, 4, glVertices, sizeof(float) * 4 * 4);
 }
 
+// While a batch target is set, the 2D bitmap and string entry points queue their quads into this list instead of
+// issuing a draw call each. Routing through a target rather than duplicating each entry point keeps the clipping and
+// coordinate math -- which is long and fiddly -- in exactly one place, and means every path that already funnels
+// through bitmap_ex_internal() gets batched for free.
+static graphics::quad_draw_list* Batch_target = nullptr;
+static bool Batch_flush_in_progress = false;
+
+void gr_begin_quad_batch(graphics::quad_draw_list* draw_list) {
+	Assertion(draw_list != nullptr, "A draw list is required to begin batching!");
+	Assertion(Batch_target == nullptr, "Quad batching is already active; nesting is not supported!");
+
+	Batch_target = draw_list;
+}
+
+void gr_flush_quad_batch() {
+	// The flush itself draws through the immediate path, which calls back in here; without this guard that would
+	// recurse and re-enter a list that is halfway through being drawn.
+	if (Batch_target == nullptr || Batch_flush_in_progress) {
+		return;
+	}
+
+	Batch_flush_in_progress = true;
+	Batch_target->flush();
+	Batch_flush_in_progress = false;
+}
+
+void gr_end_quad_batch() {
+	gr_flush_quad_batch();
+
+	Batch_target = nullptr;
+}
+
 static void bitmap_ex_internal(int x,
 							   int y,
 							   int w,
@@ -146,22 +179,44 @@ static void bitmap_ex_internal(int x,
 		u1 = temp;
 	}
 
+	material::texture_type tex_type;
+	if (aabitmap) {
+		tex_type = material::TEX_TYPE_AABITMAP;
+	} else {
+		if (bm_has_alpha_channel(gr_screen.current_bitmap)) {
+			tex_type = material::TEX_TYPE_XPARENT;
+		} else {
+			tex_type = material::TEX_TYPE_NORMAL;
+		}
+	}
+
+	if (Batch_target != nullptr) {
+		// The geometry above is already in final screen pixels, so the batched quad is the same one the immediate
+		// path would have drawn -- only the colour moves from a material uniform onto the vertices so that draws
+		// differing just by colour can still share a batch.
+		Batch_target->add_quad(graphics::quad_draw_list::LAYER_BACKGROUND,
+							   gr_screen.current_bitmap,
+							   tex_type,
+							   ALPHA_BLEND_ALPHA_BLEND_ALPHA,
+							   x1,
+							   y1,
+							   x2,
+							   y2,
+							   u0,
+							   v0,
+							   u1,
+							   v1,
+							   clr);
+		return;
+	}
+
 	material render_mat;
 	render_mat.set_blend_mode(ALPHA_BLEND_ALPHA_BLEND_ALPHA);
 	render_mat.set_depth_mode(ZBUFFER_TYPE_NONE);
 	render_mat.set_texture_map(TM_BASE_TYPE, gr_screen.current_bitmap);
 	render_mat.set_color(clr->red, clr->green, clr->blue, clr->alpha);
 	render_mat.set_cull_mode(false);
-
-	if (aabitmap) {
-		render_mat.set_texture_type(material::TEX_TYPE_AABITMAP);
-	} else {
-		if (bm_has_alpha_channel(gr_screen.current_bitmap)) {
-			render_mat.set_texture_type(material::TEX_TYPE_XPARENT);
-		} else {
-			render_mat.set_texture_type(material::TEX_TYPE_NORMAL);
-		}
-	}
+	render_mat.set_texture_type(tex_type);
 
 	draw_textured_quad(&render_mat, x1, y1, u0, v0, x2, y2, u1, v1);
 }
@@ -613,7 +668,13 @@ static void gr_string_old(float sx,
 	vert_def.add_vertex_component(vertex_format_data::POSITION2, sizeof(v4), (int)offsetof(v4, x));
 	vert_def.add_vertex_component(vertex_format_data::TEX_COORD2, sizeof(v4), (int)offsetof(v4, u));
 
-	gr_set_2d_matrix();
+	// When batching, the flush sets up the 2D matrix around the whole draw list, so doing it per string here would be
+	// pointless viewport churn.
+	const bool batching = Batch_target != nullptr;
+
+	if (!batching) {
+		gr_set_2d_matrix();
+	}
 
 	float scale_factor = (canScale && !Fred_running) ? get_font_scale_factor() : 1.0f;
 
@@ -691,6 +752,30 @@ static void gr_string_old(float sx,
 		float u1 = (u + char_width) / bw;
 		float v1 = (v + char_height) / bh;
 
+		if (Batch_target != nullptr) {
+			// Batching already coalesces every glyph queued this frame, so the fixed-size staging buffer and its
+			// flush-when-full draw are not needed on this path.
+			// Text goes in the upper layer so that a gauge's own labels stay above its background bitmap even though
+			// the two are drawn in separate passes.
+			Batch_target->add_quad(graphics::quad_draw_list::LAYER_FOREGROUND,
+								   fontData->bitmap_id,
+								   material::TEX_TYPE_AABITMAP,
+								   ALPHA_BLEND_ALPHA_BLEND_ALPHA,
+								   x1,
+								   y1,
+								   x2,
+								   y2,
+								   u0,
+								   v0,
+								   u1,
+								   v1,
+								   &GR_CURRENT_COLOR);
+
+			// Advance x for the next character
+			x += raw_spacing * scale_factor;
+			continue;
+		}
+
 		// Add vertices for the character
 		String_render_buff[buffer_offset++] = {x1, y1, u0, v0};
 		String_render_buff[buffer_offset++] = {x1, y2, u0, v1};
@@ -724,7 +809,9 @@ static void gr_string_old(float sx,
 			sizeof(v4) * buffer_offset);
 	}
 
-	gr_end_2d_matrix();
+	if (!batching) {
+		gr_end_2d_matrix();
+	}
 }
 
 
@@ -825,6 +912,12 @@ void gr_string(float sx, float sy, const char* s, int resize_mode, float scaleMu
 		gr_string_old(sx, sy, s, s + length, fontData, fnt->getHeight(), currentFont->getAutoScaleBehavior(), currentFont->getScaleBehavior(), resize_mode, scaleMultiplier);
 	} else if (currentFont->getType() == NVG_FONT) {
 		GR_DEBUG_SCOPE("Render TTF string");
+
+		// TTF text is drawn by NanoVG through its own vertex buffer rather than the immediate path, so it does not
+		// trip the flush there. Drain the batch by hand or this string would end up underneath quads that were
+		// queued before it. NanoVG coalesces its own geometry, so the text itself is still only a few draws; what
+		// this costs is that a bitmap batch cannot span a TTF string.
+		gr_flush_quad_batch();
 
 		auto path = beginDrawing(resize_mode);
 
@@ -1288,6 +1381,11 @@ void gr_render_primitives_immediate(material* material_info,
 	if (gr_screen.mode == GraphicsAPI::Stub) {
 		return;
 	}
+
+	// Anything drawn immediately while a batch is pending has to land on top of that batch, not underneath it once
+	// the batch is eventually flushed. Draining the batch here keeps primitives this file cannot batch -- solid
+	// rectangles, lines, circles -- in their original z-order.
+	gr_flush_quad_batch();
 
 	auto offset = gr_add_to_immediate_buffer(size, data);
 

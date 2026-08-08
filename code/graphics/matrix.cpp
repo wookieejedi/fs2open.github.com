@@ -265,6 +265,11 @@ void gr_set_2d_matrix(/*int x, int y, int w, int h*/)
 		return;
 	}
 
+	// Anything batched belongs on screen under the matrices that were in effect when it was queued, and draining it
+	// sets up a 2D matrix of its own, which the asserts below rightly forbid from nesting inside this one. So drain
+	// before switching rather than partway through. Does nothing when no batch is active.
+	gr_flush_quad_batch();
+
 	Assert( htl_2d_matrix_set == 0 );
 	Assert( htl_2d_matrix_depth == 0 );
 

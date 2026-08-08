@@ -118,6 +118,7 @@ extern Category NanoVGDrawStroke;
 extern Category NanoVGDrawTriangles;
 
 extern Category LineDrawListFlush;
+extern Category QuadDrawListFlush;
 
 extern Category CutsceneStep;
 extern Category CutsceneDrawVideoFrame;

@@ -3,6 +3,40 @@
 #include "globalincs/pstypes.h"
 #include "graphics/2d.h"
 
+namespace graphics {
+class quad_draw_list;
+}
+
+/**
+ * @brief Redirects 2D bitmap and string drawing into a batch list until gr_end_quad_batch() is called
+ *
+ * While a batch is active, gr_bitmap()/gr_aabitmap()/gr_string() and their variants queue quads into @p draw_list
+ * instead of issuing a draw call each. Bitmaps land in the list's lower layer and text in its upper one, so text
+ * still ends up over a bitmap queued alongside it even though the two are drawn in separate passes. Quads that
+ * overlap but use different textures within the same layer may swap z-order relative to unbatched rendering.
+ *
+ * State the list does not capture -- the clip rectangle, the 2D matrix, entering a 3D frame -- flushes it
+ * automatically before it changes, as does any primitive that cannot be batched, so the batch never draws under the
+ * wrong state and un-batched primitives keep their z-order. Batches cannot be nested.
+ *
+ * @param draw_list The list to queue quads into
+ */
+void gr_begin_quad_batch(graphics::quad_draw_list* draw_list);
+
+/**
+ * @brief Draws everything queued into the active batch list so far
+ *
+ * Batching stays active afterwards. The engine already calls this wherever state the batch depends on is about to
+ * change, so callers rarely need it directly. Does nothing if no batch is active, and is safe to call from within a
+ * flush -- it returns immediately rather than recursing.
+ */
+void gr_flush_quad_batch();
+
+/**
+ * @brief Flushes the active batch list and stops redirecting 2D drawing into it
+ */
+void gr_end_quad_batch();
+
 /**
  * @brief Flashes the screen with the specified color
  * @param r The red color value

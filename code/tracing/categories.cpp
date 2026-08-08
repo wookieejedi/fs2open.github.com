@@ -105,6 +105,7 @@ Category NanoVGDrawStroke("NanoVG Draw stroke", true);
 Category NanoVGDrawTriangles("NanoVG Draw Triangles", true);
 
 Category LineDrawListFlush("Line draw list flush", true);
+Category QuadDrawListFlush("Quad draw list flush", true);
 
 Category CutsceneStep("Cutscene step", true);
 Category CutsceneDrawVideoFrame("Draw cutscene frame", true);
