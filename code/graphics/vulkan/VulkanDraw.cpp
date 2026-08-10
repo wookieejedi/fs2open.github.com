@@ -322,9 +322,14 @@ void VulkanDrawManager::setClip(int x, int y, int w, int h, int resize_mode)
 		return;
 	}
 
+	// a screen-space rotation is applied after clipping, so the scissor has to cover wherever the rotation
+	// moves the clip region to.  The CPU-side clipping still uses the unrotated rectangle.
+	int sx = x, sy = y, sw = w, sh = h;
+	gr_expand_rect_for_2d_rotation(&sx, &sy, &sw, &sh, gr_screen.max_w, gr_screen.max_h);
+
 	// Enable scissor test
 	stateTracker->setScissorEnabled(true);
-	stateTracker->setScissor(x, y, static_cast<uint32_t>(w), static_cast<uint32_t>(h));
+	stateTracker->setScissor(sx, sy, static_cast<uint32_t>(sw), static_cast<uint32_t>(sh));
 }
 
 void VulkanDrawManager::resetClip()

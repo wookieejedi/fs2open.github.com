@@ -749,6 +749,15 @@ void setupTransforms(graphics::paths::PathRenderer* path, int resize_mode) {
 		path->scale(1.f, -1.f);
 	}
 
+	// NanoVG does not go through the model matrix, so an active screen-space rotation has to be applied by hand.
+	// It has to come first so that it ends up operating on final screen coordinates, like the model matrix does.
+	float rotation_pivot_x = 0.0f, rotation_pivot_y = 0.0f, rotation_angle = 0.0f;
+	if (gr_get_2d_rotation(&rotation_pivot_x, &rotation_pivot_y, &rotation_angle)) {
+		path->translate(rotation_pivot_x, rotation_pivot_y);
+		path->rotate(rotation_angle);
+		path->translate(-rotation_pivot_x, -rotation_pivot_y);
+	}
+
 	path->translate(x, y);
 	path->scale(w, h);
 

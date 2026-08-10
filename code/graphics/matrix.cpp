@@ -360,6 +360,107 @@ void gr_pop_scale_matrix()
 
 	matrix_uniform_up_to_date = false;
 }
+
+static bool    rotation_2d_set     = false;
+static float   rotation_2d_pivot_x = 0.0f;
+static float   rotation_2d_pivot_y = 0.0f;
+static float   rotation_2d_angle   = 0.0f;
+static matrix4 rotation_2d_matrix;
+
+void gr_push_2d_rotation(float pivot_x, float pivot_y, float angle)
+{
+	Assertion(!rotation_2d_set, "gr_push_2d_rotation() cannot be nested!");
+
+	rotation_2d_set     = true;
+	rotation_2d_pivot_x = pivot_x;
+	rotation_2d_pivot_y = pivot_y;
+	rotation_2d_angle   = angle;
+
+	float c = cosf(angle);
+	float s = sinf(angle);
+
+	// screen space has Y pointing down, so this is a clockwise rotation as seen by the player
+	matrix rot = vmd_identity_matrix;
+	rot.vec.rvec.xyz.x = c;
+	rot.vec.rvec.xyz.y = s;
+	rot.vec.uvec.xyz.x = -s;
+	rot.vec.uvec.xyz.y = c;
+
+	// rotate around the pivot rather than around the screen origin
+	vec3d offset;
+	offset.xyz.x = pivot_x - (c * pivot_x - s * pivot_y);
+	offset.xyz.y = pivot_y - (s * pivot_x + c * pivot_y);
+	offset.xyz.z = 0.0f;
+
+	vm_matrix4_set_transform(&rotation_2d_matrix, &rot, &offset);
+
+	matrix_uniform_up_to_date = false;
+}
+
+void gr_pop_2d_rotation()
+{
+	if (!rotation_2d_set)
+		return;
+
+	rotation_2d_set = false;
+
+	matrix_uniform_up_to_date = false;
+}
+
+bool gr_get_2d_rotation(float* pivot_x, float* pivot_y, float* angle)
+{
+	if (!rotation_2d_set)
+		return false;
+
+	if (pivot_x != nullptr)
+		*pivot_x = rotation_2d_pivot_x;
+	if (pivot_y != nullptr)
+		*pivot_y = rotation_2d_pivot_y;
+	if (angle != nullptr)
+		*angle = rotation_2d_angle;
+
+	return true;
+}
+
+bool gr_expand_rect_for_2d_rotation(int* x, int* y, int* w, int* h, int max_w, int max_h)
+{
+	if (!rotation_2d_set || rotation_2d_angle == 0.0f)
+		return false;
+
+	float c = cosf(rotation_2d_angle);
+	float s = sinf(rotation_2d_angle);
+
+	const float corner_x[4] = {i2fl(*x), i2fl(*x + *w), i2fl(*x), i2fl(*x + *w)};
+	const float corner_y[4] = {i2fl(*y), i2fl(*y), i2fl(*y + *h), i2fl(*y + *h)};
+
+	float min_x = FLT_MAX, min_y = FLT_MAX;
+	float max_x = -FLT_MAX, max_y = -FLT_MAX;
+
+	for (int i = 0; i < 4; i++) {
+		float dx = corner_x[i] - rotation_2d_pivot_x;
+		float dy = corner_y[i] - rotation_2d_pivot_y;
+
+		float rx = rotation_2d_pivot_x + (c * dx - s * dy);
+		float ry = rotation_2d_pivot_y + (s * dx + c * dy);
+
+		min_x = MIN(min_x, rx);
+		min_y = MIN(min_y, ry);
+		max_x = MAX(max_x, rx);
+		max_y = MAX(max_y, ry);
+	}
+
+	int new_x1 = MAX(0, fl2i(floorf(min_x)));
+	int new_y1 = MAX(0, fl2i(floorf(min_y)));
+	int new_x2 = MIN(max_w, fl2i(ceilf(max_x)));
+	int new_y2 = MIN(max_h, fl2i(ceilf(max_y)));
+
+	*x = new_x1;
+	*y = new_y1;
+	*w = MAX(0, new_x2 - new_x1);
+	*h = MAX(0, new_y2 - new_y1);
+
+	return true;
+}
 void gr_setup_viewport() {
 	if (Gr_inited) {
 		// This may be called by FRED before the gr system is actually initialized so we need to make sure that
@@ -380,6 +481,8 @@ void gr_setup_viewport() {
 	matrix_uniform_up_to_date = false;
 }
 void gr_reset_matrices() {
+	rotation_2d_set = false;
+
 	vm_matrix4_set_identity(&gr_projection_matrix);
 	vm_matrix4_set_identity(&gr_last_projection_matrix);
 
@@ -420,9 +523,18 @@ void gr_matrix_set_uniforms()
 	auto uniform_buffer = gr_get_uniform_buffer(uniform_block_type::Matrices, 1);
 	auto& aligner       = uniform_buffer.aligner();
 
-	auto matrix_data             = aligner.addTypedElement<graphics::matrix_uniforms>();
-	matrix_data->modelViewMatrix = gr_model_view_matrix;
-	matrix_data->projMatrix      = gr_projection_matrix;
+	auto matrix_data        = aligner.addTypedElement<graphics::matrix_uniforms>();
+	matrix_data->projMatrix = gr_projection_matrix;
+
+	// A screen-space rotation only makes sense while we are actually drawing in screen space, so it suspends itself
+	// for the duration of any 3D rendering a caller does in between (the target monitor's model, for instance).
+	if (rotation_2d_set && !gr_htl_projection_matrix_set) {
+		matrix4 rotated_model_view;
+		vm_matrix4_x_matrix4(&rotated_model_view, &rotation_2d_matrix, &gr_model_view_matrix);
+		matrix_data->modelViewMatrix = rotated_model_view;
+	} else {
+		matrix_data->modelViewMatrix = gr_model_view_matrix;
+	}
 
 	uniform_buffer.submitData();
 	gr_bind_uniform_buffer(uniform_block_type::Matrices, uniform_buffer.getBufferOffset(0),

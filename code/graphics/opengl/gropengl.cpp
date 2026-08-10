@@ -282,11 +282,16 @@ void gr_opengl_set_clip(int x, int y, int w, int h, int resize_mode)
 		return;
 	}
 
+	// a screen-space rotation is applied after clipping, so the scissor has to cover wherever the rotation
+	// moves the clip region to.  The CPU-side clipping still uses the unrotated rectangle.
+	int sx = x, sy = y, sw = w, sh = h;
+	gr_expand_rect_for_2d_rotation(&sx, &sy, &sw, &sh, gr_screen.max_w, gr_screen.max_h);
+
 	GL_state.ScissorTest(GL_TRUE);
 	if(GL_rendering_to_texture) {
-		glScissor(x, y, w, h);
+		glScissor(sx, sy, sw, sh);
 	} else {
-		glScissor(x, gr_screen.max_h-y-h, w, h);
+		glScissor(sx, gr_screen.max_h-sy-sh, sw, sh);
 	}
 }
 

@@ -303,6 +303,7 @@ public:
 	void getPosition(int *x, int *y) const;
 	bool isOffbyDefault() const;
 	bool isActive() const;
+	bool isSlewed() const;
 
 	// Config getters
 	SCP_string getConfigName() const;

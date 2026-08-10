@@ -15,6 +15,7 @@
 #include "freespace.h"
 #include "gamesnd/eventmusic.h"
 #include "gamesnd/gamesnd.h"
+#include "graphics/matrix.h"
 #include "graphics/openxr.h"
 #include "globalincs/alphacolors.h"
 #include "globalincs/linklist.h"
@@ -95,6 +96,13 @@ static sound_handle Player_engine_snd_loop = sound_handle::invalid();
 // the offset of the player's view vector and the ship forward vector in pixels (Swifty)
 int HUD_nose_x;
 int HUD_nose_y;
+
+// The screen-space rotation that has to be applied to the slewed HUD so that it appears to stay bolted to the ship
+// instead of to the player's eyes.  Only ever set in VR; see HUD_get_nose_coordinates() for the details.
+static bool HUD_orientation_valid = false;
+static float HUD_orientation_angle = 0.0f;
+static float HUD_orientation_pivot_x = 0.0f;
+static float HUD_orientation_pivot_y = 0.0f;
 // Global: integrity of player's target
 float Pl_target_integrity;
 
@@ -769,6 +777,11 @@ bool HudGauge::isOffbyDefault() const
 bool HudGauge::isActive() const
 {
 	return active && !sexp_override;
+}
+
+bool HudGauge::isSlewed() const
+{
+	return reticle_follow;
 }
 
 void HudGauge::updateSexpOverride(bool sexp)
@@ -2091,6 +2104,39 @@ void hud_render_all(float frametime)
 	font::set_font(font::FONT1);
 }
 
+/**
+ * @brief Applies the VR HUD orientation compensation for as long as it is in scope
+ *
+ * @details This wraps a whole gauge rather than individual draw calls, so that gauges which reach past the HudGauge
+ * render helpers are covered as well.  Anything the gauge renders through the 3D pipeline -- the target monitor's
+ * model, for instance -- suspends the rotation for its duration, since a screen-space rotation is meaningless there.
+ */
+namespace {
+class hud_orientation_guard
+{
+	bool active;
+
+public:
+	hud_orientation_guard(bool slewed, bool config)
+		: active(HUD_orientation_valid && slewed && !config && gr_screen.rendering_to_texture == -1)
+	{
+		if (active) {
+			gr_push_2d_rotation(HUD_orientation_pivot_x, HUD_orientation_pivot_y, HUD_orientation_angle);
+		}
+	}
+
+	~hud_orientation_guard()
+	{
+		if (active) {
+			gr_pop_2d_rotation();
+		}
+	}
+
+	hud_orientation_guard(const hud_orientation_guard&) = delete;
+	hud_orientation_guard& operator=(const hud_orientation_guard&) = delete;
+};
+} // namespace
+
 void hud_render_gauges(int cockpit_display_num, float frametime)
 {
 	size_t j, num_gauges;
@@ -2141,6 +2187,8 @@ void hud_render_gauges(int cockpit_display_num, float frametime)
 
 			TRACE_SCOPE(tracing::RenderHUDGauge);
 
+			hud_orientation_guard orientation_guard(sip->hud_gauges[j]->isSlewed(), false);
+
 			sip->hud_gauges[j]->resetClip();
 			sip->hud_gauges[j]->setFont();
 			sip->hud_gauges[j]->render(frametime);
@@ -2160,6 +2208,8 @@ void hud_render_gauges(int cockpit_display_num, float frametime)
 			}
 
 			TRACE_SCOPE(tracing::RenderHUDGauge);
+
+			hud_orientation_guard orientation_guard(default_hud_gauges[j]->isSlewed(), false);
 
 			default_hud_gauges[j]->resetClip();
 			default_hud_gauges[j]->setFont();
@@ -4137,6 +4187,8 @@ int hud_objective_notify_active()
  */
 void HUD_set_offsets()
 {
+	HUD_orientation_valid = false;
+
 	if ( Viewer_mode & ( VM_TOPDOWN | VM_CHASE ) ) {
 		HUD_nose_x = 0;
 		HUD_nose_y = 0;
@@ -4145,6 +4197,75 @@ void HUD_set_offsets()
 	}
 
 	hud_reticle_set_flight_cursor_offset();
+}
+
+/**
+ * @brief Works out how the slewed HUD has to be rotated on screen so that it stays aligned with the ship
+ *
+ * @details The 2D HUD is drawn along the axes of the screen, which in VR means it is bolted to the player's eyes
+ * rather than to the ship.  The nose offset already moves the HUD to wherever the ship is pointing, but its
+ * orientation still follows the head, so the HUD looks like it rotates whenever the player looks around -- most
+ * obviously when tilting the head, but also when merely looking off to the side, since perspective tilts anything
+ * that is not dead ahead.
+ *
+ * To compensate, project a second point straight "up" from the point the HUD is anchored to and measure the angle
+ * that the ship's up vector actually subtends on screen.  Rotating the HUD by that angle around the anchor makes it
+ * behave like a plane that is fixed to the ship, which is where the player's brain expects it to be.
+ *
+ * @param nose_x The projected X coordinate of the ship's forward vector, in clip-relative pixels
+ * @param nose_y The projected Y coordinate of the ship's forward vector, in clip-relative pixels
+ * @param center_x The X coordinate the forward vector projects to when looking straight ahead
+ * @param center_y The Y coordinate the forward vector projects to when looking straight ahead
+ */
+static void HUD_calculate_orientation(float nose_x, float nose_y, float center_x, float center_y)
+{
+	// this only ever happens in VR; on a monitor the HUD is supposed to be aligned to the screen
+	if ( !openxr_enabled() ) {
+		return;
+	}
+
+	vertex v1;
+	vec3d p1;
+
+	// far enough up to be numerically meaningful, close enough that it stays next to the anchor on screen
+	vm_vec_scale_add(&p1, &Player_obj->pos, &Player_obj->orient.vec.fvec, 1000.0f);
+	vm_vec_scale_add2(&p1, &Player_obj->orient.vec.uvec, 100.0f);
+
+	g3_rotate_vertex(&v1, &p1);
+
+	if ( v1.codes & CC_BEHIND ) {
+		return;
+	}
+
+	g3_project_vertex(&v1);
+
+	if ( v1.flags & PF_OVERFLOW ) {
+		return;
+	}
+
+	// where the ship's up vector points on screen, in screen coordinates (i.e. Y grows downwards)
+	float up_x = v1.screen.xyw.x - nose_x;
+	float up_y = v1.screen.xyw.y - nose_y;
+
+	float mag = sqrtf((up_x * up_x) + (up_y * up_y));
+
+	if ( mag < 0.001f ) {
+		return;
+	}
+
+	up_x /= mag;
+	up_y /= mag;
+
+	// the angle between screen up, which is (0, -1), and where the ship's up vector ended up
+	HUD_orientation_angle = atan2f(up_x, -up_y);
+
+	// The gauges are laid out around the middle of the screen and then displaced by HUD_nose_x/y, which is the
+	// distance between the projected forward vector and the centre of the view.  So that, and not the raw projected
+	// coordinate, is where the HUD is actually anchored, and therefore what we have to rotate around.
+	HUD_orientation_pivot_x = (gr_screen.max_w * 0.5f) + (nose_x - center_x);
+	HUD_orientation_pivot_y = (gr_screen.max_h * 0.5f) + (nose_y - center_y);
+
+	HUD_orientation_valid = true;
 }
 
 /**
@@ -4188,6 +4309,9 @@ void HUD_get_nose_coordinates(int *x, int *y)
 		*y = -100000;
 		return;
 	}
+
+	// has to happen before the coordinates are unsized, since the rotation is applied in real screen pixels
+	HUD_calculate_orientation(x_nose, y_nose, x_center, y_center);
 
 	gr_unsize_screen_posf(&x_nose, &y_nose);
 	gr_unsize_screen_posf(&x_center, &y_center);
