@@ -7610,14 +7610,24 @@ int will_collide_pp(vec3d *p0, vec3d *p1, float radius, object *big_objp, vec3d 
 //	Return true/false if *objp will collide with *big_objp
 //	Stuff distance in *distance to collision point if *objp will collide with *big_objp within delta_time seconds.
 //	Global collision point stuffed in *collision_point
-int will_collide_with_big_ship(object *objp, vec3d *goal_point, object *big_objp, vec3d *collision_point, float delta_time)
+int will_collide_with_big_ship(object *objp, vec3d *goal_point, object *big_objp, vec3d *collision_point, float delta_time, const char *caller)
 {
 	float		radius;
 	vec3d	end_pos;
 
-	radius = big_objp->radius + delta_time * objp->phys_info.speed;
+	//	The ray we are about to cast runs to *goal_point, so the rejection sphere has to reach that far too.
+	//	delta_time only describes the ray when goal_point is NULL, so take whichever reach is larger.
+	radius = big_objp->radius + MAX(delta_time * objp->phys_info.speed,
+		(goal_point != nullptr) ? vm_vec_dist(&objp->pos, goal_point) : 0.0f);
 
 	if (vm_vec_dist_quick(&big_objp->pos, &objp->pos) > radius) {
+		mprintf(("YYY [%s] %s vs %s: CULLED (dist %.1f > radius %.1f, delta_time %.1f)\n",
+			caller,
+			Ships[objp->instance].ship_name,
+			Ships[big_objp->instance].ship_name,
+			vm_vec_dist(&big_objp->pos, &objp->pos),
+			radius,
+			delta_time));
 		return 0;
 	}
 
@@ -7627,14 +7637,24 @@ int will_collide_with_big_ship(object *objp, vec3d *goal_point, object *big_objp
 		end_pos = *goal_point;
 	}
 
-	return will_collide_pp(&objp->pos, &end_pos, objp->radius, big_objp, collision_point);
+	bool test = will_collide_pp(&objp->pos, &end_pos, objp->radius, big_objp, collision_point);
+	mprintf(("YYY [%s] %s vs %s: %s (dist %.1f, radius %.1f, delta_time %.1f)\n",
+		caller,
+		Ships[objp->instance].ship_name,
+		Ships[big_objp->instance].ship_name,
+		test ? "COLLIDE" : "clear",
+		vm_vec_dist(&big_objp->pos, &objp->pos),
+		radius,
+		delta_time));
+
+	return test;
 }
 
 //	Return true if *objp is expected to collide with a large ship.
 //	Stuff global collision point in *collision_point.
 //	If *goal_point is not NULL, use that as the point towards which *objp will be flying.  Don't use *objp velocity
 //	*ignore_objp will typically be the target this ship is pursuing, either to attack or guard.  We don't want to avoid it.
-int will_collide_with_big_ship_all(object *objp, object *ignore_objp, vec3d *goal_point, vec3d *collision_point, float *distance, float delta_time)
+int will_collide_with_big_ship_all(object *objp, object *ignore_objp, vec3d *goal_point, vec3d *collision_point, float *distance, float delta_time, const char *caller)
 {
 	ship_obj	*so;
 	object	*big_objp;
@@ -7653,7 +7673,7 @@ int will_collide_with_big_ship_all(object *objp, object *ignore_objp, vec3d *goa
 			vec3d	cur_collision_point;
 			float		cur_dist;
 
-			if (will_collide_with_big_ship(objp, goal_point, big_objp, &cur_collision_point, delta_time)) {
+			if (will_collide_with_big_ship(objp, goal_point, big_objp, &cur_collision_point, delta_time, caller)) {
 
 				cur_dist = vm_vec_dist(&cur_collision_point, &objp->pos);
 
@@ -7690,12 +7710,12 @@ void mabs_pick_goal_point(object *objp, object *big_objp, vec3d *collision_point
 
 	int	found = 0;
 
-	//	Try various scales, in 0.5f, 0.75f, 1.0f, 1.25f.
-	//	First try 0.5f to see if we can find a point that near the center of the target ship, which presumably
-	//	means less of a turn.
-	//	Try going as far as 1.25f * radius.
+	//	Try various scales, in 1.25f, 1.5f, 1.75f, 2.0f, 2.25f, 2.5f.
+	//	These are offsets from the target's center along two perpendicular axes, so a scale of s puts the goal
+	//	point sqrt(2)*s*radius from the center.  Anything below about 0.71f is inside the bounding sphere and is
+	//	not an escape point at all, so start clear of the hull and widen from there.
 	float	s;
-	for (s=0.5f; s<1.3f; s += 0.25f) {
+	for (s=1.25f; s<2.6f; s += 0.25f) {
 		int	i;
 		for (i=0; i<4; i++) {
 			vec3d p = big_objp->pos;
@@ -7709,7 +7729,8 @@ void mabs_pick_goal_point(object *objp, object *big_objp, vec3d *collision_point
 			vm_vec_scale_add2(&p, &mat1.vec.rvec, kr);
 			goals[i].pos = p;
 			goals[i].dist = vm_vec_dist_quick(&objp->pos, &p);
-			goals[i].collide = will_collide_pp(&objp->pos, &p, objp->radius, big_objp, collision_point);
+			vec3d	candidate_hit_point;		//	Use a scratch vector here; passing collision_point would overwrite the caller's impact point.
+			goals[i].collide = will_collide_pp(&objp->pos, &p, objp->radius, big_objp, &candidate_hit_point);
 			if (!goals[i].collide)
 				found = 1;
 		}
@@ -7726,8 +7747,8 @@ void mabs_pick_goal_point(object *objp, object *big_objp, vec3d *collision_point
 				}
 			}
 
-			Assert(i != -1);
-			if (i != -1) {
+			Assert(min_index != -1);
+			if (min_index != -1) {
 				*avoid_pos = goals[min_index].pos;
 				return;
 			}
@@ -7742,27 +7763,61 @@ void mabs_pick_goal_point(object *objp, object *big_objp, vec3d *collision_point
 
 }
 
+//	Once avoidance has engaged, how far clear of the avoided ship we must get before releasing it, as a multiple
+//	of that ship's radius.  Must stay below the ring scale used by mabs_pick_goal_point (sqrt(2) * 1.25 ~= 1.77)
+//	so that gaining separation, rather than arriving at the goal point, is the normal way out.
+#define AVOID_RELEASE_RADIUS_SCALE	1.5f
+
+//	Secondary release: we reached the point we were steering for.  Backstop for when separation cannot be gained.
+#define AVOID_RELEASE_GOAL_DIST		70.0f
+
 /**
  * Return true if a large ship is being ignored.
  */
-bool maybe_avoid_big_ship(object *objp, object *ignore_objp, ai_info *aip, vec3d *goal_point, float delta_time, float time_scale = 1.f)
+bool maybe_avoid_big_ship(object *objp, object *ignore_objp, ai_info *aip, vec3d *goal_point, float delta_time, float time_scale = 1.f, const char *caller = "?")
 {
 	if (timestamp_elapsed(aip->avoid_check_timestamp)) {
 		float		distance;
 		vec3d	collision_point;
 		int		ship_num;
 		int next_check_time;
-		if ((ship_num = will_collide_with_big_ship_all(Pl_objp, ignore_objp, goal_point, &collision_point, &distance, delta_time)) != -1) {
+		if ((ship_num = will_collide_with_big_ship_all(Pl_objp, ignore_objp, goal_point, &collision_point, &distance, delta_time, caller)) != -1) {
 			aip->ai_flags.set(AI::AI_Flags::Avoiding_big_ship);
 			mabs_pick_goal_point(objp, &Objects[ship_num], &collision_point, &aip->avoid_goal_point);
 			float dist = vm_vec_dist_quick(&aip->avoid_goal_point, &objp->pos);
-			next_check_time = fl2i(2000.0f + MIN(1000.0f, (dist * 2.0f)) * time_scale); // Delay until check again is based on distance to avoid point.
+			next_check_time = fl2i((2000.0f + MIN(1000.0f, (dist * 2.0f))) * time_scale); // Delay until check again is based on distance to avoid point.
 			aip->avoid_check_timestamp = timestamp(next_check_time);	
 			aip->avoid_ship_num = ship_num;
 		} else {
-			aip->ai_flags.remove(AI::AI_Flags::Avoiding_big_ship);
-			aip->ai_flags.remove(AI::AI_Flags::Avoiding_small_ship);
-			aip->avoid_ship_num = -1;
+			//	A "no collision predicted" reading is usually a consequence of the avoidance turn itself: as soon as
+			//	we point away, the ray stops intersecting.  Releasing on that alone hands control straight back to the
+			//	attack code, which turns us back in, and the ship crabs inward a little on every cycle.  So once we are
+			//	avoiding, stay committed until we have actually gained separation from the ship we are avoiding, or
+			//	until we have arrived at the point we were steering for.
+			bool still_committed = false;
+			if (aip->ai_flags[AI::AI_Flags::Avoiding_big_ship] && (aip->avoid_ship_num >= 0)) {
+				const object *avoid_objp = &Objects[aip->avoid_ship_num];
+				if ((avoid_objp->type == OBJ_SHIP) && !(avoid_objp->flags[Object::Object_Flags::Should_be_dead])) {
+					bool clear_of_ship = vm_vec_dist_quick(&objp->pos, &avoid_objp->pos) > (avoid_objp->radius * AVOID_RELEASE_RADIUS_SCALE);
+					bool reached_goal = vm_vec_dist_quick(&objp->pos, &aip->avoid_goal_point) < AVOID_RELEASE_GOAL_DIST;
+					still_committed = !clear_of_ship && !reached_goal;
+
+					if (still_committed) {
+						mprintf(("YYY [%s] %s vs %s: clear but HOLDING (dist %.1f, release at %.1f)\n",
+							caller,
+							Ships[objp->instance].ship_name,
+							Ships[avoid_objp->instance].ship_name,
+							vm_vec_dist(&objp->pos, &avoid_objp->pos),
+							avoid_objp->radius * AVOID_RELEASE_RADIUS_SCALE));
+					}
+				}
+			}
+
+			if (!still_committed) {
+				aip->ai_flags.remove(AI::AI_Flags::Avoiding_big_ship);
+				aip->ai_flags.remove(AI::AI_Flags::Avoiding_small_ship);
+				aip->avoid_ship_num = -1;
+			}
 			next_check_time = (int) (1500 * time_scale);
 			aip->avoid_check_timestamp = timestamp(next_check_time);
 		}
@@ -7775,10 +7830,22 @@ bool maybe_avoid_big_ship(object *objp, object *ignore_objp, ai_info *aip, vec3d
 		vm_vec_normalized_dir(&v2g, &aip->avoid_goal_point, &Pl_objp->pos);
 		float dot = vm_vec_dot(&objp->orient.vec.fvec, &v2g);
 		float d2 = (1.0f + dot) * (1.0f + dot);
-		accelerate_ship(aip, d2/4.0f);
 
-		if (ai_willing_to_afterburn_hard(aip) && dot > 0.99f)
-			ai_afterburn_hard(Pl_objp, aip);
+		//	(1+dot)^2/4 bottoms out at zero throttle when the escape point is directly astern, but zero throttle
+		//	is a coast, not a stop.  At strafing speeds that coast carries the ship a long way further into the
+		//	hull while it is still swinging around.  So once the escape point is behind the nose, reverse instead,
+		//	scaling to full reverse when it is directly astern, and drop the burner if something else lit it.
+		if (dot < 0.0f) {
+			accelerate_ship(aip, dot);
+
+			if (Pl_objp->phys_info.flags & PF_AFTERBURNER_ON)
+				afterburners_stop(Pl_objp);
+		} else {
+			accelerate_ship(aip, d2/4.0f);
+
+			if (ai_willing_to_afterburn_hard(aip) && dot > 0.99f)
+				ai_afterburn_hard(Pl_objp, aip);
+		}
 
 		return true;
 	}
@@ -7790,7 +7857,7 @@ bool maybe_avoid_big_ship(object *objp, object *ignore_objp, ai_info *aip, vec3d
  * Return true if small ship and it will likely collide with large ship
  * developed by Asteroth
  */
-bool better_collision_avoidance_triggered(bool flag_to_check, float avoidance_aggression, object* pl_objp, object* ignore_objp)
+bool better_collision_avoidance_triggered(bool flag_to_check, float avoidance_aggression, object* pl_objp, object* ignore_objp, const char *caller = "better_avoid")
 {
 	ship* shipp = &Ships[pl_objp->instance];
 	ship_info* sip = &Ship_info[shipp->ship_info_index];
@@ -7801,7 +7868,7 @@ bool better_collision_avoidance_triggered(bool flag_to_check, float avoidance_ag
 		collide_vec *= radius_contribution;
 
 		collide_vec += pl_objp->pos;
-		return (maybe_avoid_big_ship(pl_objp, ignore_objp, &Ai_info[shipp->ai_index], &collide_vec, 0.f, 0.1f));
+		return (maybe_avoid_big_ship(pl_objp, ignore_objp, &Ai_info[shipp->ai_index], &collide_vec, 10.f, 0.1f, caller));
 	}
 	return false;
 }
@@ -7857,7 +7924,7 @@ void ai_stealth_find()
 	}
 
 	// check for collision with big ships
-	if (maybe_avoid_big_ship(Pl_objp, En_objp, aip, &new_pos, 10.0f)) {
+	if (maybe_avoid_big_ship(Pl_objp, En_objp, aip, &new_pos, 10.0f, 1.f, "stealth_find")) {
 		// reset ai submode to chase
 		return;
 	}
@@ -8020,7 +8087,7 @@ void ai_stealth_sweep()
 	}
 
 	// check for collision with big ship
-	if (maybe_avoid_big_ship(Pl_objp, En_objp, aip, &goal_pt, 10.0f)) {
+	if (maybe_avoid_big_ship(Pl_objp, En_objp, aip, &goal_pt, 10.0f, 1.f, "stealth_sweep")) {
 		// skip to the next pt on box
 		aip->submode_parm0++;
 		return;
@@ -9031,8 +9098,9 @@ void ai_chase()
 	if (better_collision_avoidance_triggered(
 			The_mission.ai_profile->flags[AI::Profile_Flags::Better_combat_collision_avoidance],
 			The_mission.ai_profile->better_collision_avoid_aggression_combat,
-			Pl_objp, 
-			The_mission.ai_profile->flags[AI::Profile_Flags::Better_combat_collision_avoid_includes_target] ? nullptr : En_objp)) {
+			Pl_objp,
+			The_mission.ai_profile->flags[AI::Profile_Flags::Better_combat_collision_avoid_includes_target] ? nullptr : En_objp,
+			"better_chase")) {
 		return;
 	}
 
@@ -9155,7 +9223,7 @@ void ai_chase()
 	case AIS_CHASE_GLIDEATTACK:
 	case AIS_CHASE_CIRCLESTRAFE:
 		if (vm_vec_dist_quick(&Pl_objp->pos, &predicted_enemy_pos) > 100.0f + En_objp->radius * 2.0f) {
-			if (maybe_avoid_big_ship(Pl_objp, En_objp, aip, &predicted_enemy_pos, 10.0f))
+			if (maybe_avoid_big_ship(Pl_objp, En_objp, aip, &predicted_enemy_pos, 10.0f, 1.f, "chase"))
 				return;
 		}
 
@@ -10907,7 +10975,7 @@ void ai_big_guard()
 
 		// try not to bump into things along the way
 		if ( (cur_guard_rad > max_guard_dist) || (extended_z < min_z) || (extended_z > max_z) ) {
-			if (maybe_avoid_big_ship(Pl_objp, guard_objp, aip, &goal_pt, 5.0f)) {
+			if (maybe_avoid_big_ship(Pl_objp, guard_objp, aip, &goal_pt, 5.0f, 1.f, "big_guard_far")) {
 				if (Pl_objp->phys_info.flags & PF_AFTERBURNER_ON) {
 					afterburners_stop(Pl_objp);
 				}
@@ -10921,7 +10989,7 @@ void ai_big_guard()
 				return;
 			}
 		} else {
-			if (maybe_avoid_big_ship(Pl_objp, guard_objp, aip, &goal_pt, 5.0f)) {
+			if (maybe_avoid_big_ship(Pl_objp, guard_objp, aip, &goal_pt, 5.0f, 1.f, "big_guard_near")) {
 				if (Pl_objp->phys_info.flags & PF_AFTERBURNER_ON) {
 					afterburners_stop(Pl_objp);
 				}
@@ -11019,8 +11087,9 @@ void ai_guard()
 	if (better_collision_avoidance_triggered(
 			The_mission.ai_profile->flags[AI::Profile_Flags::Better_guard_collision_avoidance],
 			The_mission.ai_profile->better_collision_avoid_aggression_guard,
-			Pl_objp, 
-			En_objp)) {
+			Pl_objp,
+			En_objp,
+			"better_guard")) {
 		return;
 	}
 
@@ -11055,7 +11124,7 @@ void ai_guard()
 
 		//	If far away, get closer
 		if (dist_to_goal_point > MAX_GUARD_DIST + 1.5 * (Pl_objp->radius + guard_objp->radius)) {
-			if (maybe_avoid_big_ship(Pl_objp, guard_objp, aip, &goal_point, 5.0f)) {
+			if (maybe_avoid_big_ship(Pl_objp, guard_objp, aip, &goal_point, 5.0f, 1.f, "guard_far")) {
 				if (Pl_objp->phys_info.flags & PF_AFTERBURNER_ON) {
 					afterburners_stop(Pl_objp);
 				}
@@ -11093,7 +11162,7 @@ void ai_guard()
 			}
 
 		} else {
-			if (maybe_avoid_big_ship(Pl_objp, guard_objp, aip, &goal_point, 2.0f)) {
+			if (maybe_avoid_big_ship(Pl_objp, guard_objp, aip, &goal_point, 2.0f, 1.f, "guard_near")) {
 				if (Pl_objp->phys_info.flags & PF_AFTERBURNER_ON) {
 					afterburners_stop(Pl_objp);
 				}
@@ -11831,7 +11900,7 @@ void ai_dock()
 
 		if ((r = maybe_dock_obstructed(Pl_objp, goal_objp, 1)) != -1) {
 			int	r1;
-			if ((r1 = maybe_avoid_big_ship(Pl_objp, goal_objp, aip, &goal_objp->pos, 7.0f)) != 0) {
+			if ((r1 = maybe_avoid_big_ship(Pl_objp, goal_objp, aip, &goal_objp->pos, 7.0f, 1.f, "dock")) != 0) {
 				nprintf(("AI", "Support ship %s avoiding large ship %s\n", Ships[Pl_objp->instance].ship_name, Ships[Objects[r1].instance].ship_name));
 				break;
 			}
@@ -14338,8 +14407,9 @@ void ai_execute_behavior(ai_info *aip)
 			if (!(better_collision_avoidance_triggered(
 					The_mission.ai_profile->flags[AI::Profile_Flags::Better_combat_collision_avoidance],
 					The_mission.ai_profile->better_collision_avoid_aggression_combat,
-					Pl_objp, 
-					The_mission.ai_profile->flags[AI::Profile_Flags::Better_combat_collision_avoid_includes_target] ? nullptr : En_objp))) {
+					Pl_objp,
+					The_mission.ai_profile->flags[AI::Profile_Flags::Better_combat_collision_avoid_includes_target] ? nullptr : En_objp,
+					"better_strafe"))) {
 				ai_big_strafe();	// strafe a big ship
 			}
 		} else {
@@ -16413,6 +16483,17 @@ void ai_ship_hit(object *objp_ship, object *hit_objp, const vec3d *hit_normal)
 		if (Ship_info[Ships[hit_objp->instance].ship_info_index].is_big_or_huge()) {
 			//	And the current object is a small ship
 			if (Ship_info[Ships[objp_ship->instance].ship_info_index].is_small_ship()) {
+				//	TEMPORARY DEBUG: log AI state at the moment of a fighter/big ship collision.
+				mprintf(("RAM: %s hit %s | mode %d sub %d | avoiding %d (ship %d) | target %d | speed %.1f | next check %d\n",
+					shipp->ship_name,
+					Ships[hit_objp->instance].ship_name,
+					aip->mode, aip->submode,
+					aip->ai_flags[AI::AI_Flags::Avoiding_big_ship] ? 1 : 0,
+					aip->avoid_ship_num,
+					aip->target_objnum,
+					objp_ship->phys_info.speed,
+					timestamp_until(aip->avoid_check_timestamp)));
+
 				//	Recover from hitting a big ship.  Note, if two big ships collide, they just pound away at each other.  Oh well.  Recovery looks dumb and it's very late.
 				big_ship_collide_recover_start(objp_ship, hit_objp, hit_normal);	// NOLINT(readability-suspicious-call-argument)
 			}

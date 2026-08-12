@@ -40,19 +40,19 @@
 
 // AI BIG MAGIC NUMBERS
 // Select strafing options are now exposed to modders  --wookieejedi
-#define	STRAFE_RETREAT_COLLIDE_TIME	2.0		// when anticipated collision time is less than this, begin retreat
-#define	STRAFE_RETREAT_COLLIDE_DIST	100		// when perpendicular distance to *surface* is less than this, begin retreat
+#define	STRAFE_RETREAT_COLLIDE_TIME	4.0		// when anticipated collision time is less than this, begin retreat
+#define	STRAFE_RETREAT_COLLIDE_DIST	300		// when perpendicular distance to *surface* is less than this, begin retreat
 
 #define	EVADE_BOX_BASE_DISTANCE			300		// standard distance to end evade submode
 #define	EVADE_BOX_MIN_DISTANCE			200		// minimun distance to end evade submode, after long time
 
-#define	ATTACK_STOP_DISTANCE				150		// when distance to target is less than this, put on brakes
+#define	ATTACK_STOP_DISTANCE				300		// when distance to target is less than this, put on brakes
 
 #define	ATTACK_COLLIDE_BASE_DIST		300		// absolute distance at which to begin checking for possible collision
 #define	ATTACK_COLLIDE_AVOID_DIST		60			// perpendicular distance to attack surface at which begin avoiding
-#define	ATTACK_COLLIDE_AVOID_TIME		1.0		// anticipated collision time at which to begin evade
-#define	ATTACK_COLLIDE_SLOW_DIST		150		// perpendicular distance to attack surface at which begin slowing down
-#define	ATTACK_COLLIDE_SLOW_TIME		1.5		// anticipated collision time at which to begin slowing down
+#define	ATTACK_COLLIDE_AVOID_TIME		2.0		// anticipated collision time at which to begin evade
+#define	ATTACK_COLLIDE_SLOW_DIST		300		// perpendicular distance to attack surface at which begin slowing down
+#define	ATTACK_COLLIDE_SLOW_TIME		3		// anticipated collision time at which to begin slowing down
 
 #define GLIDE_STRAFE_DISTANCE			50.0f	//Distance from the ship to pass when glide strafing
 #define GLIDE_STRAFE_MIN_TIME			2	//Minimum amount of time to stay on one glide strafe approach vector
@@ -868,7 +868,7 @@ void ai_big_chase_ct()
 extern bool ai_select_secondary_weapon(object *objp, ship_weapon *swp, int priority1 = -1, int priority2 = -1);
 extern float set_secondary_fire_delay(ai_info *aip, ship *shipp, weapon_info *swip, bool burst);
 extern bool ai_choose_secondary_weapon(object *objp, ai_info *aip, object *en_objp);
-extern bool maybe_avoid_big_ship(object *objp, object *ignore_objp, ai_info *aip, vec3d *goal_point, float delta_time, float time_scale = 1.f);
+extern bool maybe_avoid_big_ship(object *objp, object *ignore_objp, ai_info *aip, vec3d *goal_point, float delta_time, float time_scale = 1.f, const char *caller = "?");
 
 extern void maybe_cheat_fire_synaptic(object *objp);
 
@@ -1124,7 +1124,7 @@ void ai_big_chase()
 	case SM_ATTACK:
 	case SM_SUPER_ATTACK:
 		if (vm_vec_dist_quick(&Pl_objp->pos, &predicted_enemy_pos) > 100.0f + En_objp->radius * 2.0f) {
-			if (maybe_avoid_big_ship(Pl_objp, En_objp, aip, &predicted_enemy_pos, 10.0f)) {
+			if (maybe_avoid_big_ship(Pl_objp, En_objp, aip, &predicted_enemy_pos, 10.0f, 1.f, "big_chase")) {
 				if ((Pl_objp->phys_info.flags & PF_AFTERBURNER_ON) && !(aip->ai_flags[AI::AI_Flags::Kamikaze])) {
 					afterburners_stop(Pl_objp);
 				}
@@ -1443,11 +1443,13 @@ static bool ai_big_strafe_maybe_retreat(const vec3d *target_pos)
 
 	bool collide_time;
 	bool collide_distance;
-	if (The_mission.ai_profile->flags[AI::Profile_Flags::Fix_standard_strafe]) {
+	float dot = 0.0f;			// only meaningful on the Fix_standard_strafe path; hoisted so the debug log can see it
+	bool using_fix = The_mission.ai_profile->flags[AI::Profile_Flags::Fix_standard_strafe];
+	if (using_fix) {
 		// check if ship facing target, as likely will only collide if facing
 		vec3d vec_to_tpos;
 		vm_vec_normalized_dir(&vec_to_tpos, target_pos, &Pl_objp->pos);
-		float dot = vm_vec_dot(&vec_to_tpos, &Pl_objp->orient.vec.fvec);
+		dot = vm_vec_dot(&vec_to_tpos, &Pl_objp->orient.vec.fvec);
 		if (dot <= 0.0f) {
 			collide_time = false;
 			collide_distance = false;
@@ -1469,9 +1471,45 @@ static bool ai_big_strafe_maybe_retreat(const vec3d *target_pos)
 
 	//if ((dot_to_enemy > 1.0f - 0.1f * En_objp->radius/(dist_to_enemy + 1.0f)) && (Pl_objp->phys_info.speed > dist_to_enemy/5.0f))
 
+	bool will_retreat = !(aip->ai_flags[AI::AI_Flags::Kamikaze]) && ((aip->ai_flags[AI::AI_Flags::Target_collision]) || (collide_time) || (collide_distance));
+
+	//	TEMPORARY DEBUG: the checks above measure to the attack point, which can be far from the nearest plating.
+	//	Log the true clearance to the target's bounding box alongside it so the difference is visible.  Note that
+	//	get_world_closest_box_point_with_delta() is no use for this -- it returns the distance to the nearest face
+	//	*plane*, which is not a clearance once you are outside the box on the other axes.  So clamp our position
+	//	into the box in the target's own frame and measure to that.  All of this should come out with the log.
+	{
+		vec3d		rel, local, clamped;
+		polymodel	*box_pm = model_get(Ship_info[Ships[En_objp->instance].ship_info_index].model_num);
+
+		vm_vec_sub(&rel, &Pl_objp->pos, &En_objp->pos);
+		vm_vec_rotate(&local, &rel, &En_objp->orient);
+
+		clamped.xyz.x = MAX(box_pm->mins.xyz.x, MIN(box_pm->maxs.xyz.x, local.xyz.x));
+		clamped.xyz.y = MAX(box_pm->mins.xyz.y, MIN(box_pm->maxs.xyz.y, local.xyz.y));
+		clamped.xyz.z = MAX(box_pm->mins.xyz.z, MIN(box_pm->maxs.xyz.z, local.xyz.z));
+
+		float box_dist = vm_vec_dist(&local, &clamped);		// zero once we are inside the box
+
+		mprintf(("RETREAT %s vs %s: attack_pt %.1f, box %.1f%s | speed %.1f dot %.2f | sub %d %s | time %d dist %d (thresh %.1f) | %s\n",
+			Ships[Pl_objp->instance].ship_name,
+			Ships[En_objp->instance].ship_name,
+			dist_to_target,
+			box_dist,
+			(box_dist <= 0.0f) ? " INSIDE" : "",
+			Pl_objp->phys_info.speed,
+			dot,
+			aip->submode,
+			using_fix ? "fix" : "legacy",
+			collide_time ? 1 : 0,
+			collide_distance ? 1 : 0,
+			STRAFE_RETREAT_COLLIDE_DIST + speed_to_dist_penalty,
+			will_retreat ? "RETREATING" : "holding course"));
+	}
+
 	// Inside 2 sec retreat, setting goal point to box point + strafe_retreat_box_dist
 	// If collision, use std collision resolution.
-	if ( !(aip->ai_flags[AI::AI_Flags::Kamikaze]) && ((aip->ai_flags[AI::AI_Flags::Target_collision]) || (collide_time) || (collide_distance)) ) {
+	if ( will_retreat ) {
 		if (aip->ai_flags[AI::AI_Flags::Target_collision]) {
 			// use standard collision resolution
 			aip->ai_flags.remove(AI::AI_Flags::Target_collision);
