@@ -108,7 +108,7 @@ void turret_instance_find_world_orient(matrix* out_mat, int model_instance_num, 
 	vec3d fvec, uvec;
 	model_instance_local_to_global_dir(&fvec, &pm->submodel[submodel_num].frame_of_reference.vec.fvec, pm, pmi, pm->submodel[submodel_num].parent, objorient);
 	model_instance_local_to_global_dir(&uvec, &pm->submodel[submodel_num].frame_of_reference.vec.uvec, pm, pmi, pm->submodel[submodel_num].parent, objorient);
-	vm_vector_2_matrix(out_mat, &fvec, &uvec);	// not the _norm variant: the submodel transform chain does not preserve unit length
+	vm_vector_2_matrix_norm(out_mat, &fvec, &uvec);
 }
 
 /**

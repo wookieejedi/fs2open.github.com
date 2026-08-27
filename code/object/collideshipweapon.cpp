@@ -169,7 +169,6 @@ static void ship_weapon_do_hit_stuff(object *pship_obj, object *weapon_obj, cons
 		// Use the weapon orientation to augment the orientation computation.
 		vec3d weapon_up;
 		model_instance_global_to_local_dir(&weapon_up, &weapon_obj->orient.vec.uvec, pm, pmi, submodel_num, &pship_obj->orient);
-		vm_vec_normalize(&weapon_up);	// the submodel transform chain does not preserve unit length
 
 		matrix decal_orient;
 		vm_vector_2_matrix_norm(&decal_orient, hit_dir, &weapon_up); // hit_dir is already normalized so we can use the more efficient function
