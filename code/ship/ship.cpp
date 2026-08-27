@@ -13291,7 +13291,7 @@ int ship_fire_primary(object * obj, int force, bool rollback_shot)
 					}
 
 					for (int w = 0; w < shot_count; w++) {
-						beam_fire_info fbfire_info;
+						beam_fire_info fbfire_info{};
 						shipp->beam_sys_info.turret_norm.xyz.x = 0.0f;
 				    	shipp->beam_sys_info.turret_norm.xyz.y = 0.0f;
     					shipp->beam_sys_info.turret_norm.xyz.z = 1.0f;

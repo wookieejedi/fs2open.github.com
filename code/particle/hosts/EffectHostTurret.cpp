@@ -21,8 +21,8 @@ std::pair<vec3d, matrix> EffectHostTurret::getPositionAndOrientation(bool relati
 		Assertion(subsys != nullptr, "EffectHostTurret constructed with missing subsystem!");
 		tp = subsys->system_info;
 	}
-	vec3d* gun_pos = &tp->turret_firing_point[m_fire_pnt % tp->turret_num_firing_points];
-	const matrix& gun_frame_of_reference = pm->submodel[m_submodel].frame_of_reference;
+	vec3d* gun_pos = (tp->turret_num_firing_points > 0) ? &tp->turret_firing_point[m_fire_pnt % tp->turret_num_firing_points] : &vmd_zero_vector;
+	const matrix& gun_frame_of_reference = (m_submodel >= 0 && m_submodel < pm->n_models) ? pm->submodel[m_submodel].frame_of_reference : vmd_identity_matrix;
 
 	matrix orientation;
 	if (!relativeToParent) {
