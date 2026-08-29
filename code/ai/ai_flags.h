@@ -200,6 +200,7 @@ namespace AI {
 											// b) completion no longer requires moving 0.1m in a single frame (framerate-dependent)
 		Fix_shockwave_expire_before_do_damage,	// shockwaves whose lifetime is shorter than one frame apply their area damage at least once before expiring
 		Fix_small_ai_recover_after_engines_repaired, // ensure small ship AI can switch back to useful AI modes if engines get repaired
+		Stagger_attack_positions,	// attacking fightercraft spread out in range and approach angle instead of all converging on the same point
 
 		NUM_VALUES
 	};

@@ -139,6 +139,11 @@ public:
 	float better_collision_avoid_aggression_combat;
 	float better_collision_avoid_aggression_guard;
 
+	// Attack position staggering  --wookieejedi
+	//   Lateral spread of an attacking fightercraft's approach path, expressed as a multiple of the
+	//   range it wants to engage at.  Only used when the Stagger_attack_positions flag is set.
+	float attack_position_spread;
+
 	// AI strafing options  --wookieejedi
 	float standard_strafe_when_below_speed; // Speed at which standard strafing large ships is possibly triggered
 	float strafe_retreat_box_dist;          // Distance beyond the bounding box to retreat to strafing point 

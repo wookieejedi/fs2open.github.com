@@ -767,6 +767,12 @@ void parse_ai_profiles_tbl(const char *filename)
 
 				set_flag(profile, "$fix fighter/bomber AI recovers after engines repaired:", AI::Profile_Flags::Fix_small_ai_recover_after_engines_repaired);
 
+				set_flag(profile, "$stagger attack positions for fightercraft:", AI::Profile_Flags::Stagger_attack_positions);
+
+				if (optional_string("+attack position spread for fightercraft:")) {
+					stuff_float(&profile->attack_position_spread);
+				}
+
 				// end of options ----------------------------------------
 
 				// if we've been through once already and are at the same place, force a move
@@ -862,6 +868,8 @@ void ai_profile_t::reset()
 
 	better_collision_avoid_aggression_combat = 3.5f;
 	better_collision_avoid_aggression_guard = 3.5f;
+
+	attack_position_spread = 0.75f;
 
 	standard_strafe_when_below_speed = 3.0f;
 	strafe_retreat_box_dist = 300.0f;

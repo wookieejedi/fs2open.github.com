@@ -7431,6 +7431,50 @@ void do_random_sidethrust(ai_info *aip, ship_info *sip)
 }
 
 const float AI_DEFAULT_ATTACK_APPROACH_DIST = 200.0f;
+
+/**
+ * Determine the range at which pl_objp would rather engage en_objp, based on the weapon it is currently using.
+ */
+static float ai_get_optimal_attack_range(object *pl_objp, object *en_objp)
+{
+	// assume the original retail value of a 200m range
+	float optimal_range = AI_DEFAULT_ATTACK_APPROACH_DIST;
+	ship* shipp = &Ships[pl_objp->instance];
+	ship_weapon* weapons = &shipp->weapons;
+	weapon_info* wip = nullptr;
+
+	// see if we can get a better one
+	if (weapons->num_primary_banks >= 1 && weapons->current_primary_bank >= 0 && !shipp->flags[Ship::Ship_Flags::Primaries_locked]) {
+		wip = &Weapon_info[weapons->primary_bank_weapons[weapons->current_primary_bank]];
+	} else if (weapons->num_secondary_banks >= 1 && weapons->current_secondary_bank >= 0 && !shipp->flags[Ship::Ship_Flags::Secondaries_locked]) {
+		wip = &Weapon_info[weapons->secondary_bank_weapons[weapons->current_secondary_bank]];
+	}
+
+	if (wip != nullptr && wip->optimum_range > 0)
+		optimal_range = wip->optimum_range;
+
+	// Standoff for mines: keep at least 1.2x the target mine's proximity radius
+	// so we shoot it from outside its detonation zone.
+	if (en_objp->type == OBJ_WEAPON) {
+		weapon_info *target_wip = &Weapon_info[Weapons[en_objp->instance].weapon_info_index];
+		if (target_wip->is_mine() && target_wip->proximity_radius > 0.0f) {
+			float standoff = target_wip->proximity_radius * 1.2f;
+			// Don't stand off farther than our weapon can actually reach, or we'd hold
+			// position outside firing range and never destroy the mine. If the weapon
+			// can't outrange the detonation zone, close in and accept the risk.
+			if (wip != nullptr)
+				standoff = MIN(standoff, MIN(wip->max_speed * wip->lifetime, wip->weapon_range));
+			optimal_range = MAX(optimal_range, standoff);
+		}
+	}
+
+	//	Vary the preferred range per ship, so that ships attacking the same target don't all settle
+	//	onto the same standoff distance and pile up on one another.
+	if (The_mission.ai_profile->flags[AI::Profile_Flags::Stagger_attack_positions])
+		optimal_range *= static_randf_range(OBJ_INDEX(pl_objp), 0.7f, 1.6f);
+
+	return optimal_range;
+}
 				
 /**
  * Set acceleration while in attack mode.
@@ -7483,36 +7527,8 @@ void attack_set_accel(ai_info *aip, ship_info *sip, float dist_to_enemy, float d
 		return;
 	}
 
-	// assume the original retail value of a 200m range
-	float optimal_range = AI_DEFAULT_ATTACK_APPROACH_DIST;
-	ship_weapon* weapons = &Ships[Pl_objp->instance].weapons;
-	weapon_info* wip = nullptr;
+	float optimal_range = ai_get_optimal_attack_range(Pl_objp, En_objp);
 	ship* shipp = &Ships[Pl_objp->instance];
-
-	// see if we can get a better one
-	if (weapons->num_primary_banks >= 1 && weapons->current_primary_bank >= 0 && !shipp->flags[Ship::Ship_Flags::Primaries_locked]) {
-		wip = &Weapon_info[weapons->primary_bank_weapons[weapons->current_primary_bank]];
-	} else if (weapons->num_secondary_banks >= 1 && weapons->current_secondary_bank >= 0 && !shipp->flags[Ship::Ship_Flags::Secondaries_locked]) {
-		wip = &Weapon_info[weapons->secondary_bank_weapons[weapons->current_secondary_bank]];
-	}
-
-	if (wip != nullptr && wip->optimum_range > 0)
-		optimal_range = wip->optimum_range;
-
-	// Standoff for mines: keep at least 1.2x the target mine's proximity radius
-	// so we shoot it from outside its detonation zone.
-	if (En_objp->type == OBJ_WEAPON) {
-		weapon_info *target_wip = &Weapon_info[Weapons[En_objp->instance].weapon_info_index];
-		if (target_wip->is_mine() && target_wip->proximity_radius > 0.0f) {
-			float standoff = target_wip->proximity_radius * 1.2f;
-			// Don't stand off farther than our weapon can actually reach, or we'd hold
-			// position outside firing range and never destroy the mine. If the weapon
-			// can't outrange the detonation zone, close in and accept the risk.
-			if (wip != nullptr)
-				standoff = MIN(standoff, MIN(wip->max_speed * wip->lifetime, wip->weapon_range));
-			optimal_range = MAX(optimal_range, standoff);
-		}
-	}
 
 	if (dist_to_enemy > optimal_range + vm_vec_mag_quick(&En_objp->phys_info.vel) * dot_from_enemy + Pl_objp->phys_info.speed * speed_ratio) {
 		if (dist_to_enemy > optimal_range + 600.0f) {
@@ -8109,8 +8125,34 @@ void ai_chase_attack(ai_info *aip, ship_info *sip, vec3d *predicted_enemy_pos, f
 		scale = dist_to_enemy/(dist_to_enemy + En_objp->radius) * En_objp->radius;
 		scale *= 0.5f * En_objp->radius/(En_objp->phys_info.speed + En_objp->radius);	// scale downward by 1/2 to 1/4
 		vm_vec_scale_add(&new_pos, predicted_enemy_pos, &randvec, scale);
-	} else
+	} else {
 		new_pos = *predicted_enemy_pos;
+
+		//	Offset our approach so that ships attacking the same target fan out rather than all
+		//	converging on a single point and crowding into each other.  The offset fades to zero
+		//	by the time we reach the range we want to shoot from, so it costs us no gun accuracy
+		//	where it actually matters.
+		if (The_mission.ai_profile->flags[AI::Profile_Flags::Stagger_attack_positions]) {
+			float optimal_range = ai_get_optimal_attack_range(Pl_objp, En_objp);
+			float fade = (dist_to_enemy - optimal_range) / (optimal_range * 2.0f);
+			CLAMP(fade, 0.0f, 1.0f);
+
+			if (fade > 0.0f) {
+				vec3d v2e, offset;
+				vm_vec_normalized_dir(&v2e, predicted_enemy_pos, &Pl_objp->pos);
+
+				//	Flatten this ship's fixed offset direction perpendicular to the approach vector,
+				//	so it spreads us out sideways instead of becoming lead/lag error.
+				static_randvec(OBJ_INDEX(Pl_objp), &randvec);
+				vm_vec_projection_onto_plane(&offset, &randvec, &v2e);
+
+				if (vm_vec_mag_quick(&offset) > 0.01f) {
+					vm_vec_normalize(&offset);
+					vm_vec_scale_add2(&new_pos, &offset, optimal_range * The_mission.ai_profile->attack_position_spread * fade);
+				}
+			}
+		}
+	}
 
 	//SUSHI: Don't change bank while circle strafing or glide attacking
 	if (dist_to_enemy < 250.0f && dot_from_enemy > 0.7f && aip->submode != AIS_CHASE_CIRCLESTRAFE && aip->submode != AIS_CHASE_GLIDEATTACK) {
