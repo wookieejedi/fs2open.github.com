@@ -7470,7 +7470,7 @@ static float ai_get_optimal_attack_range(object *pl_objp, object *en_objp)
 
 	//	Vary the preferred range per ship, so that ships attacking the same target don't all settle
 	//	onto the same standoff distance and pile up on one another.
-	if (The_mission.ai_profile->flags[AI::Profile_Flags::Stagger_attack_positions])
+	if (The_mission.ai_profile->flags[AI::Profile_Flags::Stagger_attack_positions] && Ship_info[shipp->ship_info_index].is_small_ship())
 		optimal_range *= static_randf_range(OBJ_INDEX(pl_objp), 0.7f, 1.6f);
 
 	return optimal_range;
@@ -8131,8 +8131,10 @@ void ai_chase_attack(ai_info *aip, ship_info *sip, vec3d *predicted_enemy_pos, f
 		//	Offset our approach so that ships attacking the same target fan out rather than all
 		//	converging on a single point and crowding into each other.  The offset fades to zero
 		//	by the time we reach the range we want to shoot from, so it costs us no gun accuracy
-		//	where it actually matters.
-		if (The_mission.ai_profile->flags[AI::Profile_Flags::Stagger_attack_positions]) {
+		//	where it actually matters.  Circle strafing and glide attacking are left alone, since
+		//	both deliberately manage their own aim and are flown at close range anyway.
+		if (The_mission.ai_profile->flags[AI::Profile_Flags::Stagger_attack_positions] && sip->is_small_ship()
+			&& aip->submode != AIS_CHASE_CIRCLESTRAFE && aip->submode != AIS_CHASE_GLIDEATTACK) {
 			float optimal_range = ai_get_optimal_attack_range(Pl_objp, En_objp);
 			float fade = (dist_to_enemy - optimal_range) / (optimal_range * 2.0f);
 			CLAMP(fade, 0.0f, 1.0f);
