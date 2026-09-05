@@ -70,13 +70,13 @@ struct reinforcements;
 
 #define NUM_DEFAULT_COMM_ORDER_TYPES 6
 
-enum SmallCraftFlavor {
+enum SmallCraftFlavor : int {
 	ALL_FIGHTERS_AND_BOMBERS,
 	ALL_FIGHTERS,
 	ALL_BOMBERS,
 };
 
-enum CommOrderType {
+enum CommOrderType : int {
 	MSG_SHIPS,
 	MSG_WINGS,
 	MSG_ALL_FIGHTERS_AND_BOMBERS,
@@ -86,6 +86,10 @@ enum CommOrderType {
 	REARM_REPAIR,
 	ABORT_REARM,
 	MAX_COMM_ORDER_TYPES,
+
+	// not selectable from the table; tags menu items that came from a Lua general-order category.
+	// deliberately after MAX_COMM_ORDER_TYPES so that it stays outside the range of real order types
+	LUA_GENERAL_CATEGORY,
 };
 
 typedef struct mmode_item {

@@ -157,19 +157,16 @@ const SCP_set<size_t> target_messages = []() {
 	return setunion;
 }();
 
-bool is_smallcraft_flavor(ship_info *sinfop, SmallCraftFlavor flavor) {
+static bool is_smallcraft_flavor(const ship_info *sinfop, SmallCraftFlavor flavor) {
 	switch (flavor) {
 		case SmallCraftFlavor::ALL_FIGHTERS_AND_BOMBERS:
 			return sinfop->is_fighter_bomber();
-			break;
 		case SmallCraftFlavor::ALL_FIGHTERS:
 			return sinfop->is_fighter();
-			break;
 		case SmallCraftFlavor::ALL_BOMBERS:
 			return sinfop->is_bomber();
-			break;
 	}
-	UNREACHABLE("Invalid SmallCraftFlavor of %i in 'is_smallcraft_flavor()'", flavor);
+	UNREACHABLE("Invalid SmallCraftFlavor of %i in 'is_smallcraft_flavor()'", static_cast<int>(flavor));
 	return false;
 }
 
@@ -177,6 +174,8 @@ bool is_smallcraft_flavor(ship_info *sinfop, SmallCraftFlavor flavor) {
 void hud_init_comm_orders()
 {
 	int i;
+
+	Comm_order_types.clear();
 
 	if (!Parsed_comm_orders.empty()) {
 		for (i = 0; i < sz2i(Parsed_comm_orders.size()); i++)	{
@@ -196,8 +195,6 @@ void hud_init_comm_orders()
 			Comm_order_types.emplace_back(Default_comm_order_types[i]);
 		}
 	}
-
-
 
 	for (auto& order : Player_orders)
 		order.localize();
@@ -1024,7 +1021,8 @@ void hud_squadmsg_send_to_all_fighters( int command, int player_num, SmallCraftF
 
 	// check for multiplayer mode
 	if(MULTIPLAYER_CLIENT) {
-		send_player_order_packet(SQUAD_MSG_ALL, 0, command);
+		// for SQUAD_MSG_ALL the index field is unused, so it carries the flavor to the server
+		send_player_order_packet(SQUAD_MSG_ALL, static_cast<int>(flavor), command);
 		return;
 	}
 
@@ -1048,7 +1046,14 @@ void hud_squadmsg_send_to_all_fighters( int command, int player_num, SmallCraftF
 	}
 	*/
 
-	for ( i = 0; i < Num_wings; i++ ) {
+	// A wing is ordered as a unit, which means its members are classified by the wing leader alone.
+	// That is fine when the order goes to fighters and bombers alike, but for the fighters-only and
+	// bombers-only flavors it would both miss the non-matching leader's matching wingmates and catch
+	// the matching leader's non-matching ones.  So for those flavors, skip the wing pass entirely and
+	// let the per-ship pass below order every matching craft individually.
+	const bool order_wings_as_units = (flavor == SmallCraftFlavor::ALL_FIGHTERS_AND_BOMBERS);
+
+	for ( i = 0; order_wings_as_units && (i < Num_wings); i++ ) {
 		int shipnum;
 
 		if ( (Wings[i].flags[Ship::Wing_Flags::Gone]) || (Wings[i].current_count == 0) )
@@ -1094,7 +1099,8 @@ void hud_squadmsg_send_to_all_fighters( int command, int player_num, SmallCraftF
 		}
 	}
 
-	// now find any friendly fighter/bomber ships not in wings
+	// now find the remaining friendly small craft: those not in wings, plus -- when we skipped the wing
+	// pass above -- every matching ship regardless of wing membership
 	for (auto so: list_range(&Ship_obj_list)) {
 		auto objp = &Objects[so->objnum];
 		if (objp->flags[Object::Object_Flags::Should_be_dead])
@@ -1102,12 +1108,25 @@ void hud_squadmsg_send_to_all_fighters( int command, int player_num, SmallCraftF
 		if ( objp->type != OBJ_SHIP )
 			continue;
 
-		// don't send messge to ships not on player's team, or that are in a wing.
+		// don't send message to ships not on player's team
 		shipp = &Ships[objp->instance];
-		if ( (shipp->team != ordering_shipp->team) || (shipp->wingnum != -1) )
+		if ( shipp->team != ordering_shipp->team )
 			continue;
 
-		// don't send message to non fighter wings
+		// never order the ship that is giving the order, nor the instructor
+		if ( (shipp == ordering_shipp) || is_instructor(objp) )
+			continue;
+
+		// ships in a wing were already ordered as part of that wing
+		if ( order_wings_as_units && (shipp->wingnum != -1) )
+			continue;
+
+		// ...and when they weren't, still honor the wing-level checks the wing pass would have made
+		if ( !order_wings_as_units && (shipp->wingnum != -1)
+			&& (Wings[shipp->wingnum].flags[Ship::Wing_Flags::Gone] || Wings[shipp->wingnum].flags[Ship::Wing_Flags::Departing]) )
+			continue;
+
+		// don't send message to craft of the wrong type
 		if (!is_smallcraft_flavor(&Ship_info[shipp->ship_info_index], flavor)) {
 			continue;
 		}
@@ -1120,14 +1139,17 @@ void hud_squadmsg_send_to_all_fighters( int command, int player_num, SmallCraftF
 		if (!shipp->orders_accepted.contains(command))
 			continue;
 
-		if (send_message) {
+		// the wing pass picks its responder with SHIP_GET_UNSILENCED, which never picks a player ship;
+		// don't let one respond here either.  It still receives the order -- we just keep looking for
+		// an AI ship to acknowledge it.
+		if ( send_message && !(objp->flags[Object::Object_Flags::Player_ship]) ) {
 			hud_add_issued_order("All Fighters", command);
-			if ( hud_squadmsg_send_ship_command(objp->instance, command, send_message, SQUADMSG_HISTORY_UPDATE, player_num) ) {
+			if ( hud_squadmsg_send_ship_command(objp->instance, command, 1, SQUADMSG_HISTORY_UPDATE, player_num) ) {
 				send_message = 0;
 			}
 		}
 		else {
-			hud_squadmsg_send_ship_command(objp->instance, command, send_message, SQUADMSG_HISTORY_NO_UPDATE, player_num);
+			hud_squadmsg_send_ship_command(objp->instance, command, 0, SQUADMSG_HISTORY_NO_UPDATE, player_num);
 		}
 	}
 
@@ -1780,7 +1802,8 @@ void hud_squadmsg_type_select( )
 		if (i < sz2i(Comm_order_types.size())) {
 			MsgItems.push_back({Comm_order_types[i].first, 1, Comm_order_types[i].second}); // assume active
 		} else {
-			MsgItems.push_back({0, 1, lua_cat_list[i - sz2i(Comm_order_types.size())]}); // assume active
+			// tag these so they can't be mistaken for a built-in order type below
+			MsgItems.push_back({CommOrderType::LUA_GENERAL_CATEGORY, 1, lua_cat_list[i - sz2i(Comm_order_types.size())]}); // assume active
 		}
 	}
 
@@ -1793,7 +1816,7 @@ void hud_squadmsg_type_select( )
 		goto do_main_menu;
 	}
 
-	for ( auto item : MsgItems ) {
+	for ( auto &item : MsgItems ) {
 		if (((hud_communications_state(Player_ship) != COMM_OK)
 			|| ((Game_mode & GM_MULTIPLAYER) && !multi_can_message(Net_player)))
 			&& (item.instance != CommOrderType::REARM_REPAIR)
@@ -1818,7 +1841,7 @@ void hud_squadmsg_type_select( )
 				item.active = hud_squadmsg_exist_fighters_bombers(SmallCraftFlavor::ALL_BOMBERS);
 				break;
 			case CommOrderType::REINFORCEMENTS:
-				item.active = (Player_ship != nullptr) && !hud_squadmsg_reinforcements_available(Player_ship->team) && Msg_shortcut_command == -1;
+				item.active = (Player_ship != nullptr) && hud_squadmsg_reinforcements_available(Player_ship->team) && Msg_shortcut_command == -1;
 				break;
 			case CommOrderType::REARM_REPAIR:
 				if (Hide_main_rearm_items_in_comms_gauge) {
@@ -1874,7 +1897,7 @@ do_main_menu:
 				hud_squadmsg_do_mode( SM_MODE_REPAIR_REARM );
 			} else if (MsgItems[k].instance == CommOrderType::ABORT_REARM && !Hide_main_rearm_items_in_comms_gauge) {
 				hud_squadmsg_do_mode( SM_MODE_REPAIR_REARM_ABORT );
-			} else if (k >= sz2i(Comm_order_types.size())) {
+			} else if (MsgItems[k].instance == CommOrderType::LUA_GENERAL_CATEGORY) {
 				Lua_sqd_msg_cat = lua_cat_list[k - sz2i(Comm_order_types.size())];
 				hud_squadmsg_do_mode( SM_MODE_GENERAL );
 			}
@@ -2916,7 +2939,9 @@ void HudGaugeSquadMessage::render(float  /*frametime*/, bool config)
 			}
 		}
 	} else {
-		nitems = 6;
+		// hud_squadmsg_type_select() does not run in config mode, so MsgItems is empty here and the
+		// preview is built straight from the order types instead
+		nitems = MIN(sz2i(Comm_order_types.size()), MAX_MENU_DISPLAY);
 	}
 
 	int sx = x + fl2i(Item_start_offsets[0] * scale);
@@ -2937,21 +2962,16 @@ void HudGaugeSquadMessage::render(float  /*frametime*/, bool config)
 		int item_num;
 		bool isSelectedItem = (i == Selected_menu_item);
 		char text[256];
-		mmode_item item = MsgItems[First_menu_item + i];
 
+		// in config mode we are previewing the first page of the Comms Menu, and MsgItems is empty
+		int item_instance;
 		if (!config) {
+			const mmode_item &item = MsgItems[First_menu_item + i];
+			item_instance = item.instance;
 			strcpy_s(text, item.text.c_str());
 		} else {
-			// in config mode, so create just the first page of the Comms Menu
-			// as other functions, such as hud_squadmsg_type_select() will not be run in config mode
-			const char* temp_comm_order_types[] = {XSTR("Ships", 293),
-				XSTR("Wings", 294),
-				XSTR("All Fighters", 295),
-				XSTR("Reinforcements", 296),
-				XSTR("Rearm/Repair Subsys", 297),
-				XSTR("Abort Rearm", 298)
-			};
-			strcpy_s(text, temp_comm_order_types[i]);
+			item_instance = Comm_order_types[i].first;
+			strcpy_s(text, Comm_order_types[i].second.c_str());
 		}
 
 		// blit the background
@@ -2973,7 +2993,7 @@ void HudGaugeSquadMessage::render(float  /*frametime*/, bool config)
 		}
 
 		bool item_visible = config
-			? (!Hide_main_rearm_items_in_comms_gauge) || ((item.instance != CommOrderType::REARM_REPAIR) && (item.instance != CommOrderType::ABORT_REARM))
+			? (!Hide_main_rearm_items_in_comms_gauge) || ((item_instance != CommOrderType::REARM_REPAIR) && (item_instance != CommOrderType::ABORT_REARM))
 			: (MsgItems[First_menu_item + i].active >= 0);
 		if (item_visible) {
 			// first print an icon to indicate selected item

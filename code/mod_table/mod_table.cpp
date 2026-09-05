@@ -530,7 +530,7 @@ void parse_mod_table(const char *filename)
 					} else if (!stricmp(order_type.c_str(), "ABORT REARM")) {
 						Parsed_comm_orders.emplace_back(std::pair(CommOrderType::ABORT_REARM, text));
 					} else {
-						Error(LOCATION, "Game Settings Table: Invalid squad order type %s found!", order_type.c_str());
+						error_display(0, "Game Settings Table: Invalid squad order type %s found!  Skipping this entry.", order_type.c_str());
 					}
 				}
 			}
